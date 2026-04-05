@@ -1,4 +1,3 @@
-import "./App.css";
 import Analyze from "./components/Analyze";
 
 function App() {
