@@ -81,7 +81,6 @@ function Analyze() {
       {loading && <p className="mt-4 text-gray-300">Analyzing {username}...</p>}
 
       {error && <p className="mt-4 text-red-400">{error}</p>}
-
       {details && !loading && !error && (
         <div className="mt-6 rounded-lg border border-gray-700 bg-gray-800 p-4 text-left">
           <h2 className="text-xl font-semibold">
@@ -119,6 +118,62 @@ function Analyze() {
               </ul>
             </div>
             <p>🔀 Fork signal: {details.fork_signal}</p>
+          </div>
+          {details.pinned_repos && details.pinned_repos.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-lg font-semibold">📌 Pinned Repos:</h3>
+              <ul className="list-disc list-inside">
+                {details.pinned_repos.map((repo, index) => (
+                  <li key={index} className="mt-2">
+                    <strong>{repo.name}</strong>:{" "}
+                    {repo.description || "No description"}
+                    <br />
+                    Topics: {repo.topics.join(", ") || "None"}
+                    <br />
+                    Languages: {repo.languages.join(", ") || "None"}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="mt-4 rounded-md bg-gray-700 p-3">
+            <h3 className="text-lg font-medium">AI Insights:</h3>
+            <p className="mt-2">
+              Developer Type: {details.insights.developer_type}
+            </p>
+            <p className="mt-2">
+              Experience Signal: {details.insights.experience_signal}
+            </p>
+            <p className="mt-2">Summary: {details.insights.summary}</p>
+            <div className="mt-2">
+              <h4 className="font-medium">Strengths:</h4>
+              <ul className="list-disc list-inside">
+                {details.insights.strengths.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="mt-2">
+              <h4 className="font-medium">Weaknesses:</h4>
+              <ul className="list-disc list-inside">
+                {details.insights.weaknesses.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="mt-2">
+              <h4 className="font-medium">Highlights of Profile:</h4>
+              <p>{details.insights.highlights_of_profile}</p>
+            </div>
+            <div className="mt-2">
+              <h4 className="font-medium">Recommendation:</h4>
+              <p>{details.insights.recommendation}</p>
+            </div>
+            <div className="mt-2">
+              <h4 className="font-medium">Confidence:</h4>
+              <p>{details.insights.confidence}</p>
+            </div>
           </div>
         </div>
       )}

@@ -7,7 +7,12 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 from collections import Counter
 
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import List
+import json
+
+from models.responseModels import AnalyzeResponse, HomeResponse, TopRepo, PinnedRepo
+from insights import generate_insights, InsightResponse
 
 load_dotenv()
 
@@ -25,30 +30,68 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class TopRepo(BaseModel):
-    name: str
-    stars: int
+GRAPHQL_QUERY = """
+query($username: String!, $reposCursor: String) {
+  user(login: $username) {
 
+    pinnedItems(first: 6, types: REPOSITORY) {
+      nodes {
+        ... on Repository {
+          name
+          description
+          stargazerCount
+          primaryLanguage {
+            name
+          }
+          repositoryTopics(first: 10) {
+            nodes {
+              topic {
+                name
+              }
+            }
+          }
+          languages(first: 10, orderBy: {field: SIZE, direction: DESC}) {
+            nodes {
+              name
+            }
+          }
+        }
+      }
+    }
 
-class AnalyzeResponse(BaseModel):
-    username: str
-    total_repos: int
-    total_stars: int
-    top_languages: list[tuple[str, int]]
-    top_repo: TopRepo
-    top_topics: list[tuple[str, int]]
-    top_events: list[tuple[str, int]]
-    total_events: int
-    activity_level: str
-    active_event_repos: int
-    has_org_experience: bool
-    latest_event_at: str | None
-    avg_event_gap_seconds: float | None
-    fork_signal: str
+    repositories(first: 100, after: $reposCursor, orderBy: {field: UPDATED_AT, direction: DESC}) {
+      nodes {
+        name
+        isFork
+        stargazerCount
 
-class HomeResponse(BaseModel):
-    message: str
+        primaryLanguage {
+          name
+        }
 
+        languages(first: 10, orderBy: {field: SIZE, direction: DESC}) {
+          nodes {
+            name
+          }
+        }
+
+        repositoryTopics(first: 10) {
+          nodes {
+            topic {
+              name
+            }
+          }
+        }
+      }
+
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
+"""
 
 @app.get("/", response_model=HomeResponse)
 def home() -> HomeResponse:
@@ -65,7 +108,7 @@ async def get_user_info(username: str):
         
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"https://api.github.com/users/{username}/events",
+                f"https://api.github.com/users/{username}",
                 headers=headers
             )
         if response.status_code != 200:
@@ -109,59 +152,56 @@ async def analyze_user(username: str) -> AnalyzeResponse:
             "Accept": "application/vnd.github+json"
         }
 
-        data: list[dict] = []
-        page = 1
+        all_repos: list[dict] = []
+        cursor = None
 
         async with httpx.AsyncClient() as client:
             events_data = await fetch_user_events(client, username, headers)
 
             while True:
-                response = await client.get(
-                    f"https://api.github.com/users/{username}/repos",
-                    headers=headers,
-                    params={"per_page": 100, "page": page, "sort": "updated"}
+                variables = {"username": username, "reposCursor": cursor}
+                response = await client.post(
+                    "https://api.github.com/graphql",
+                    headers={**headers, "Content-Type": "application/json"},
+                    json={"query": GRAPHQL_QUERY, "variables": variables}
                 )
 
                 if response.status_code != 200:
-                    raise HTTPException(
-                        status_code=response.status_code,
-                        detail=response.json()
-                    )
+                    raise HTTPException(status_code=response.status_code, detail=response.json())
 
-                page_data = response.json()
-                if not isinstance(page_data, list):
-                    raise HTTPException(
-                        status_code=500,
-                        detail="Unexpected GitHub response format."
-                    )
+                gql_data = response.json()
+                if 'errors' in gql_data:
+                    raise HTTPException(status_code=400, detail=gql_data['errors'])
 
-                data.extend(page_data)
+                user_data = gql_data['data']['user']
+                all_repos.extend(user_data['repositories']['nodes'])
 
-                if len(page_data) < 100:
+                page_info = user_data['repositories']['pageInfo']
+                if not page_info['hasNextPage']:
                     break
+                cursor = page_info['endCursor']
 
-                page += 1
+        pinned_items = user_data['pinnedItems']['nodes']
 
-        total_repos = len(data)
+        total_repos = len(all_repos)
         language_counter = Counter()
         total_stars = 0
         topic_counter = Counter()
         forked_repos = 0
-        for repo in data:
-            total_stars += repo.get("stargazers_count", 0)
-            if repo.get("fork"):
+        for repo in all_repos:
+            total_stars += repo.get('stargazers', {}).get('totalCount', 0)
+            if repo['isFork']:
                 forked_repos += 1
                 continue
-            language = repo.get("language")
-            if not language:
-                continue
-            stars = repo.get("stargazers_count", 0)
+            languages = [l['name'] for l in repo.get('languages', {}).get('nodes', [])]
+            stars = repo.get('stargazers', {}).get('totalCount', 0)
             weight = stars + 1
-            language_counter[language] += weight
-            topics = repo.get("topics", [])
+            for lang in languages:
+                language_counter[lang] += weight
+            topics = [t['topic']['name'] for t in repo.get('repositoryTopics', {}).get('nodes', [])]
             topic_counter.update(topics)
 
-        top_languages = language_counter.most_common(5)
+        top_languages = language_counter.most_common(10)
         top_topics = topic_counter.most_common(10)
         
         total_events = len(events_data)
@@ -210,9 +250,9 @@ async def analyze_user(username: str) -> AnalyzeResponse:
         )
 
         top_repo = (
-            max(data, key=lambda x: x.get("stargazers_count", 0))
-            if data
-            else {"name": "None", "stargazers_count": 0}
+            max(all_repos, key=lambda x: x.get('stargazers', {}).get('totalCount', 0))
+            if all_repos
+            else {"name": "None", "stargazers": {"totalCount": 0}}
         )
         
         fork_signal = "unknown"
@@ -222,6 +262,93 @@ async def analyze_user(username: str) -> AnalyzeResponse:
             fork_signal = "actively contributes to existing projects"
         else:
             fork_signal = "limited open-source interaction"
+            
+        # Compute recency
+        now = datetime.now(timezone.utc)
+        if latest_event_at:
+            latest_dt = datetime.fromisoformat(latest_event_at.replace("Z", "+00:00"))
+            days_since = (now - latest_dt).days
+            if days_since <= 7:
+                recency = "very recent"
+            elif days_since <= 30:
+                recency = "recent"
+            else:
+                recency = "old"
+        else:
+            recency = "unknown"
+        
+        # Compute intensity
+        if avg_event_gap_seconds and avg_event_gap_seconds < 86400:
+            intensity = "high"
+        elif avg_event_gap_seconds and avg_event_gap_seconds < 604800:
+            intensity = "medium"
+        else:
+            intensity = "low"
+            
+        repo_focus = (
+            "highly focused" if active_event_repos <= 3
+            else "focused" if active_event_repos <= 7
+            else "diverse"
+        )    
+        
+        pinned_repos = [
+            PinnedRepo(
+                name=repo['name'],
+                description=repo['description'],
+                topics=[t['topic']['name'] for t in repo.get('repositoryTopics', {}).get('nodes', [])],
+                languages=[l['name'] for l in repo.get('languages', {}).get('nodes', [])]
+            ) for repo in pinned_items
+        ]
+        
+        data = {
+            "username": username,
+             "experience": {
+                "total_repos": total_repos,
+                "active_repos": active_event_repos,
+                "stars": total_stars
+            },
+            "skills": {
+                "languages": [
+                {"name": lang, "count": count}
+                for lang, count in top_languages
+                ],
+                "topics": [
+                    {"name": topic, "count": count}
+                    for topic, count in top_topics
+                ]
+            },
+            "activity": {
+                "level": activity_level,
+                "recent_days": recency,
+                "events_per_week": intensity
+            },
+            "work_style": {
+                "repo_focus": repo_focus,
+            },
+            "collaboration": {
+                "org_experience": has_org_experience,
+                "event_types": [
+                    {"name": event, "count": count}
+                    for event, count in top_events
+                ]
+            },
+            "open_source": {
+                "fork_signal": fork_signal
+            },
+            "highlights": {
+                "pinned_repos": [
+                    {
+                        "name": repo.name,
+                        "description": repo.description,
+                        "topics": repo.topics,  
+                        "languages": repo.languages
+                    }
+                    for repo in pinned_repos
+                ]
+            }
+        }
+        
+        insights = await generate_insights(username, data)
         
         # Return the analysis results
         return AnalyzeResponse(
@@ -230,8 +357,8 @@ async def analyze_user(username: str) -> AnalyzeResponse:
             total_stars=total_stars,
             top_languages=top_languages,
             top_repo=TopRepo(
-                name=top_repo.get("name", "None"),
-                stars=top_repo.get("stargazers_count", 0)
+                name=top_repo["name"],
+                stars=top_repo.get('stargazers', {}).get('totalCount', 0)
             ),
             top_topics=top_topics,
             top_events=top_events,
@@ -241,7 +368,9 @@ async def analyze_user(username: str) -> AnalyzeResponse:
             has_org_experience=has_org_experience,
             latest_event_at=latest_event_at,
             avg_event_gap_seconds=avg_event_gap_seconds,
-            fork_signal=fork_signal
+            fork_signal=fork_signal,
+            insights=insights,
+            pinned_repos=pinned_repos
         )
 
     except HTTPException:
@@ -249,25 +378,5 @@ async def analyze_user(username: str) -> AnalyzeResponse:
     except Exception as e:
         raise  HTTPException(status_code=500, detail=str(e))
 
-
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
-
-
-
-# {
-#   "developer_type": "AI/Backend Enthusiast",
-#   "experience_level": "Beginner to Intermediate",
-#   "strengths": [
-#     "Strong interest in LLM and AI systems",
-#     "Working with FastAPI and backend frameworks",
-#     "Exploring RAG and vector databases"
-#   ],
-#   "weaknesses": [
-#     "No community validation (0 stars)",
-#     "Limited project scale",
-#     "Low repository count"
-#   ],
-#   "recommendation": "Good learning-stage candidate, needs more production-level projects",
-#   "confidence": "medium"
-# }
