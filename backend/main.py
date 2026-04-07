@@ -11,7 +11,8 @@ from datetime import datetime, timezone
 from typing import List
 import json
 
-from models.responseModels import AnalyzeResponse, HomeResponse, TopRepo, PinnedRepo
+from models.responseModels import AnalyzeResponse, HomeResponse, TopRepo, PinnedRepo, CommitEntry
+from models.requestModels import LLMInsightRequest
 from insights import generate_insights, InsightResponse
 
 load_dotenv()
@@ -308,98 +309,86 @@ async def analyze_user(username: str) -> AnalyzeResponse:
             else "diverse"
         )    
         
-        pinned_repos = [
-            PinnedRepo(
+        pinned_repos: list[PinnedRepo] = []
+        pinned_repos_dict: dict[str, dict] = {}
+        for repo in pinned_items:
+            history = (
+                repo.get('defaultBranchRef', {})
+                .get('target', {})
+                .get('history', {})
+            )
+            total_commits = history.get('totalCount', 0)
+            recent_commits = [
+                CommitEntry(
+                    message=commit.get('message', 'N/A').split('\n')[0],
+                    date=commit.get('committedDate'),
+                    author=commit.get('author', {}).get('name', 'Unknown')
+                )
+                for commit in history.get('nodes', [])
+            ]
+
+            pinned_repo = PinnedRepo(
                 name=repo['name'],
                 description=repo['description'],
                 topics=[t['topic']['name'] for t in repo.get('repositoryTopics', {}).get('nodes', [])],
                 languages=[l['name'] for l in repo.get('languages', {}).get('nodes', [])],
-                total_commits=(
-                    repo.get('defaultBranchRef', {})
-                    .get('target', {})
-                    .get('history', {})
-                    .get('totalCount', 0)
-                )
-            ) for repo in pinned_items
-        ]
+                total_commits=total_commits,
+                recent_commits=recent_commits
+            )
+            pinned_repos.append(pinned_repo)
+            pinned_repos_dict[pinned_repo.name] = {
+                "description": pinned_repo.description,
+                "topics": pinned_repo.topics,
+                "languages": pinned_repo.languages,
+                "total_commits": pinned_repo.total_commits,
+                "recent_commits": [c.model_dump() for c in pinned_repo.recent_commits]
+            }
+
         total_pinned_commits = sum(repo.total_commits for repo in pinned_repos)
         
-        # Extract commit history for pinned repos
-        pinned_repos_with_commits = []
-        for repo in pinned_items:
-            commit_data = {
-                "name": repo['name'],
-                "total_commits": 0,
-                "recent_commits": []
-            }
-            
-            # Extract commit history from defaultBranchRef
-            if repo.get('defaultBranchRef') and repo['defaultBranchRef'].get('target'):
-                history = repo['defaultBranchRef']['target'].get('history', {})
-                commit_data['total_commits'] = history.get('totalCount', 0)
-                
-                # Extract top 10 commits
-                commits = history.get('nodes', [])
-                for commit in commits:
-                    commit_data['recent_commits'].append({
-                        "message": commit.get('message', 'N/A').split('\n')[0],  # First line of commit message
-                        "date": commit.get('committedDate'),
-                        "author": commit.get('author', {}).get('name', 'Unknown')
-                    })
-            
-            pinned_repos_with_commits.append(commit_data)
-        
-        data = {
-            "username": username,
-             "experience": {
+        llm_input = LLMInsightRequest(
+            username=username,
+            experience={
                 "total_repos": total_repos,
                 "active_repos": active_event_repos,
                 "stars": total_stars
             },
-            "skills": {
+            skills={
                 "languages": [
-                {"name": lang, "count": count}
-                for lang, count in top_languages
+                    {"name": lang, "count": count}
+                    for lang, count in top_languages
                 ],
                 "topics": [
                     {"name": topic, "count": count}
                     for topic, count in top_topics
                 ]
             },
-            "activity": {
+            activity={
                 "level": activity_level,
                 "recent_days": recency,
                 "events_per_week": intensity
             },
-            "work_style": {
+            work_style={
                 "repo_focus": repo_focus,
             },
-            "collaboration": {
+            collaboration={
                 "org_experience": has_org_experience,
                 "event_types": [
                     {"name": event, "count": count}
                     for event, count in top_events
                 ]
             },
-            "open_source": {
+            open_source={
                 "fork_signal": fork_signal
             },
-            "highlights": {
-                "pinned_repos": [
-                    {
-                        "name": repo.name,
-                        "description": repo.description,
-                        "topics": repo.topics,  
-                        "languages": repo.languages
-                    }
-                    for repo in pinned_repos
-                ]
+            highlights={
+                "pinned_repos": pinned_repos_dict
             },
-            "overall_pinned_commits": total_pinned_commits,
-            "pinned_repos_commit_history": pinned_repos_with_commits
-        }
-        
-        insights = await generate_insights(username, data)
+            overall_pinned_commits=total_pinned_commits,
+            pinned_repos_commit_history=pinned_repos_dict
+        )
+
+        insights = await generate_insights(llm_input)
         
         # Return the analysis results
         return AnalyzeResponse(

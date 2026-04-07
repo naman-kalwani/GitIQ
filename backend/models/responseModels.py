@@ -1,9 +1,14 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List
 
 class TopRepo(BaseModel):
   name: str
   stars: int
+
+class CommitEntry(BaseModel):
+  message: str
+  date: str | None
+  author: str
 
 class PinnedRepo(BaseModel):
   name: str
@@ -11,6 +16,7 @@ class PinnedRepo(BaseModel):
   topics: List[str]
   languages: List[str]
   total_commits: int = 0
+  recent_commits: List[CommitEntry] = Field(default_factory=list)
 
 class HomeResponse(BaseModel):
   message: str

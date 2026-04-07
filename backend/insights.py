@@ -6,12 +6,13 @@ from pydantic import BaseModel
 import json
 
 from models.responseModels import InsightResponse
+from models.requestModels import LLMInsightRequest
 
 load_dotenv()
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-async def generate_insights(username: str, data: dict) -> InsightResponse:
+async def generate_insights(data: LLMInsightRequest) -> InsightResponse:
   SYSTEM_PROMPT = '''
     You are a senior technical recruiter.
     Analyze the developer strictly based on the provided data and return ONLY valid JSON.
@@ -83,8 +84,8 @@ async def generate_insights(username: str, data: dict) -> InsightResponse:
       
   '''
   USER_PROMPT = f'''
-    Analyze the following GitHub profile data for the user : "{username}":
-    {data}
+    Analyze the following GitHub profile data for the user : "{data.username}":
+    {data.model_dump_json(indent=2)}
   '''
   
   messages = [
