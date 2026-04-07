@@ -55,6 +55,23 @@ query($username: String!, $reposCursor: String) {
               name
             }
           }
+          defaultBranchRef {
+            target {
+              ... on Commit {
+                history(first: 10) {
+                  totalCount
+                  nodes {
+                    oid
+                    message
+                    committedDate
+                    author {
+                      name
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -296,9 +313,41 @@ async def analyze_user(username: str) -> AnalyzeResponse:
                 name=repo['name'],
                 description=repo['description'],
                 topics=[t['topic']['name'] for t in repo.get('repositoryTopics', {}).get('nodes', [])],
-                languages=[l['name'] for l in repo.get('languages', {}).get('nodes', [])]
+                languages=[l['name'] for l in repo.get('languages', {}).get('nodes', [])],
+                total_commits=(
+                    repo.get('defaultBranchRef', {})
+                    .get('target', {})
+                    .get('history', {})
+                    .get('totalCount', 0)
+                )
             ) for repo in pinned_items
         ]
+        total_pinned_commits = sum(repo.total_commits for repo in pinned_repos)
+        
+        # Extract commit history for pinned repos
+        pinned_repos_with_commits = []
+        for repo in pinned_items:
+            commit_data = {
+                "name": repo['name'],
+                "total_commits": 0,
+                "recent_commits": []
+            }
+            
+            # Extract commit history from defaultBranchRef
+            if repo.get('defaultBranchRef') and repo['defaultBranchRef'].get('target'):
+                history = repo['defaultBranchRef']['target'].get('history', {})
+                commit_data['total_commits'] = history.get('totalCount', 0)
+                
+                # Extract top 10 commits
+                commits = history.get('nodes', [])
+                for commit in commits:
+                    commit_data['recent_commits'].append({
+                        "message": commit.get('message', 'N/A').split('\n')[0],  # First line of commit message
+                        "date": commit.get('committedDate'),
+                        "author": commit.get('author', {}).get('name', 'Unknown')
+                    })
+            
+            pinned_repos_with_commits.append(commit_data)
         
         data = {
             "username": username,
@@ -345,7 +394,9 @@ async def analyze_user(username: str) -> AnalyzeResponse:
                     }
                     for repo in pinned_repos
                 ]
-            }
+            },
+            "overall_pinned_commits": total_pinned_commits,
+            "pinned_repos_commit_history": pinned_repos_with_commits
         }
         
         insights = await generate_insights(username, data)
@@ -355,6 +406,7 @@ async def analyze_user(username: str) -> AnalyzeResponse:
             username=username,
             total_repos=total_repos,
             total_stars=total_stars,
+            total_pinned_commits=total_pinned_commits,
             top_languages=top_languages,
             top_repo=TopRepo(
                 name=top_repo["name"],

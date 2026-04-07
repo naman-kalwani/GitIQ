@@ -128,6 +128,8 @@ function Analyze() {
                     <strong>{repo.name}</strong>:{" "}
                     {repo.description || "No description"}
                     <br />
+                    Total commits: {repo.total_commits ?? 0}
+                    <br />
                     Topics: {repo.topics.join(", ") || "None"}
                     <br />
                     Languages: {repo.languages.join(", ") || "None"}

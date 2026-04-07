@@ -10,6 +10,7 @@ class PinnedRepo(BaseModel):
   description: str | None
   topics: List[str]
   languages: List[str]
+  total_commits: int = 0
 
 class HomeResponse(BaseModel):
   message: str
@@ -28,6 +29,7 @@ class AnalyzeResponse(BaseModel):
   username: str
   total_repos: int
   total_stars: int
+  total_pinned_commits: int
   top_languages: list[tuple[str, int]]
   top_repo: TopRepo
   top_topics: list[tuple[str, int]]
