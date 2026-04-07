@@ -1,186 +1,300 @@
-import React, { useState } from "react";
-import axios from "axios";
-import api from "../api.js";
-import UsernameForm from "./UsernameForm.jsx";
+import PinnedReposPanel from "./PinnedReposPanel.jsx";
+import InsightsPanel from "./InsightsPanel.jsx";
 
-function Analyze() {
-  const [details, setDetails] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [username, setUsername] = useState("");
+function toNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
-  const toErrorMessage = (err, user) => {
-    if (!axios.isAxiosError(err)) {
-      return "Something unexpected happened. Please try again.";
-    }
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
 
-    if (err.code === "ECONNABORTED") {
-      return "Request timed out. Please try again.";
-    }
+function buildActivityScore(details) {
+  const repoScore = toNumber(details.total_repos) * 4;
+  const starScore = toNumber(details.total_stars) * 2;
+  const eventScore = toNumber(details.total_events) * 1.8;
+  const repoTouchScore = toNumber(details.active_event_repos) * 3;
 
-    if (err.response) {
-      const { status, data } = err.response;
+  const activityBonus =
+    {
+      low: 8,
+      medium: 18,
+      high: 28,
+      very_high: 34,
+      extreme: 38,
+    }[String(details.activity_level || "").toLowerCase()] || 0;
 
-      if (status === 404) {
-        return `GitHub user "${user}" was not found.`;
-      }
+  const orgBonus = details.has_org_experience ? 10 : 0;
 
-      if (status === 429) {
-        return "GitHub rate limit hit. Please wait and try again.";
-      }
+  return clamp(
+    Math.round(
+      repoScore +
+        starScore +
+        eventScore +
+        repoTouchScore +
+        activityBonus +
+        orgBonus,
+    ),
+    12,
+    100,
+  );
+}
 
-      const detail = data?.detail;
-      if (typeof detail === "string" && detail.trim()) {
-        return detail;
-      }
+function formatGap(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return "No cadence data";
+  }
 
-      if (typeof detail === "object" && detail?.message) {
-        return detail.message;
-      }
+  if (seconds < 60) {
+    return `${Math.round(seconds)} sec`;
+  }
 
-      if (typeof data?.message === "string" && data.message.trim()) {
-        return data.message;
-      }
+  if (seconds < 3600) {
+    return `${Math.round(seconds / 60)} min`;
+  }
 
-      return `Request failed with status ${status}.`;
-    }
+  if (seconds < 86400) {
+    return `${(seconds / 3600).toFixed(1)} hrs`;
+  }
 
-    if (err.request) {
-      return "Cannot reach server. Ensure backend is running on port 8000.";
-    }
+  return `${(seconds / 86400).toFixed(1)} days`;
+}
 
-    return err.message || "Failed to fetch analysis data.";
-  };
+function formatLatestActivity(value) {
+  if (!value) {
+    return "Not available";
+  }
 
-  const fetchDetails = async (user) => {
-    if (!user) {
-      setError("Please enter a valid GitHub username.");
-      setDetails(null);
-      return;
-    }
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) {
+    return String(value);
+  }
 
-    setUsername(user);
-    setLoading(true);
-    setError("");
-    try {
-      const response = await api.get(`/analyze/${user}`);
-      setDetails(response.data);
-    } catch (error) {
-      console.error("Error fetching details : ", error);
-      setError(toErrorMessage(error, user));
-      setDetails(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+  return timestamp.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function OverviewView({ details }) {
+  const activityScore = buildActivityScore(details);
+  const languageEntries = details.top_languages || [];
+  const topTopics = details.top_topics || [];
+  const languageTotal =
+    languageEntries.reduce((sum, [, value]) => sum + toNumber(value), 0) || 1;
 
   return (
-    <div className="w-full max-w-xl">
-      <UsernameForm getUser={fetchDetails} />
+    <section className="dashboard-overview">
+      <div className="dashboard-grid">
+        <article className="panel panel-score">
+          <div className="panel-head">
+            <p className="section-kicker">Signal</p>
+            <h3>Activity score</h3>
+          </div>
+          <div className="score-layout">
+            <div
+              className="score-ring"
+              style={{ "--score": activityScore }}
+              aria-label={`Activity score ${activityScore} out of 100`}
+            >
+              <div className="score-ring-inner">
+                <strong>{activityScore}</strong>
+                <span>score</span>
+              </div>
+            </div>
+            <div className="score-copy">
+              <p>
+                A combined signal from repo count, stars, active events, and org
+                exposure.
+              </p>
+              <div className="metric-pills">
+                <span>{details.total_repos ?? 0} repos</span>
+                <span>{details.total_stars ?? 0} stars</span>
+                <span>{details.total_events ?? 0} events</span>
+              </div>
+            </div>
+          </div>
+        </article>
 
-      {loading && <p className="mt-4 text-gray-300">Analyzing {username}...</p>}
+        <article className="panel panel-languages">
+          <div className="panel-head">
+            <p className="section-kicker">Mix</p>
+            <h3>Top languages</h3>
+          </div>
+          <div className="bar-list compact">
+            {languageEntries.length ? (
+              languageEntries.slice(0, 5).map(([language, value], index) => {
+                const width = Math.max(
+                  12,
+                  (toNumber(value) / languageTotal) * 100,
+                );
 
-      {error && <p className="mt-4 text-red-400">{error}</p>}
-      {details && !loading && !error && (
-        <div className="mt-6 rounded-lg border border-gray-700 bg-gray-800 p-4 text-left">
-          <h2 className="text-xl font-semibold">
-            Results for : {details.username}
-          </h2>
-          <div className="mt-4 grid gap-3 text-sm text-gray-200">
-            <p>📦 Total repos: {details.total_repos}</p>
-            <p>⭐ Total stars: {details.total_stars}</p>
+                return (
+                  <div className="bar-row" key={`${language}-${index}`}>
+                    <div className="bar-row-meta">
+                      <span>{language}</span>
+                      <strong>{Math.round(width)}%</strong>
+                    </div>
+                    <div className="bar-track slim">
+                      <div
+                        className="bar-fill language-fill"
+                        style={{ width: `${width}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="empty-copy">No language data available.</p>
+            )}
+          </div>
+        </article>
+
+        <article className="panel panel-topics">
+          <div className="panel-head">
+            <p className="section-kicker">Signals</p>
+            <h3>Top topics</h3>
+          </div>
+          <div className="tag-list dense">
+            {topTopics.length ? (
+              topTopics.map(([topic, count]) => (
+                <span className="tag" key={topic}>
+                  {topic} · {count}
+                </span>
+              ))
+            ) : (
+              <p className="empty-copy">No topic data available.</p>
+            )}
+          </div>
+        </article>
+
+        <section className="panel panel-accordion panel-accordion-open">
+          <div className="panel-accordion-head">
+            <p className="section-kicker">Advanced analytics</p>
+            <h3>Detailed signals</h3>
+          </div>
+
+          <div className="analytics-grid">
+            <div className="analytics-item">
+              <span>Total events</span>
+              <strong>{details.total_events ?? 0}</strong>
+            </div>
+            <div className="analytics-item">
+              <span>Last active</span>
+              <strong>{formatLatestActivity(details.latest_event_at)}</strong>
+            </div>
+            <div className="analytics-item">
+              <span>Avg gap</span>
+              <strong>{formatGap(details.avg_event_gap_seconds)}</strong>
+            </div>
+            <div className="analytics-item analytics-item-wide">
+              <span>Fork ratio</span>
+              <strong>{details.fork_signal || "Unknown"}</strong>
+            </div>
+          </div>
+
+          <div className="analytics-event-list">
+            {(details.top_events || []).map(([eventName, count]) => (
+              <div className="analytics-event-row" key={eventName}>
+                <span>{eventName}</span>
+                <strong>{count}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <aside className="overview-rail">
+        <article className="panel panel-repo">
+          <div className="panel-head">
+            <p className="section-kicker">Focus</p>
+            <h3>Top repository</h3>
+          </div>
+          <div className="repo-feature">
+            <strong>{details.top_repo?.name || "No top repo"}</strong>
+            <div className="repo-badge">⭐ {details.top_repo?.stars ?? 0}</div>
             <p>
-              💻 Top languages:{" "}
-              {details.top_languages.map(([lang]) => `${lang}`).join(", ")}
+              {details.top_repo?.description || "No description available."}
             </p>
+          </div>
+        </article>
+
+        <article className="panel panel-org">
+          <div className="panel-head">
+            <p className="section-kicker">Collaboration</p>
+            <h3>Org experience</h3>
+          </div>
+          <div className="status-card-mini">
+            <span
+              className={
+                details.has_org_experience
+                  ? "status-mark yes"
+                  : "status-mark no"
+              }
+            >
+              {details.has_org_experience ? "Yes" : "No"}
+            </span>
             <p>
-              🧭 Recent event types:{" "}
-              {details.top_events?.map(([type]) => type).join(", ") || "None"}
+              {details.has_org_experience
+                ? "Evidence of organizational work and team-oriented activity."
+                : "No clear org signals detected in the available profile data."}
             </p>
-            <p>📊 Activity level: {details.activity_level || "unknown"}</p>
-            <p>🗂️ Recent events count: {details.total_events ?? 0}</p>
-            <p>📁 Repos touched in events: {details.active_event_repos ?? 0}</p>
-            <p>
-              🏢 Org experience: {details.has_org_experience ? "Yes" : "No"}
-            </p>
-            <p>
-              🏆 Top repo: {details.top_repo.name} ({details.top_repo.stars}{" "}
-              stars)
-            </p>
+          </div>
+        </article>
+
+        <article className="panel panel-activity">
+          <div className="panel-head">
+            <p className="section-kicker">Activity</p>
+            <h3>Summary</h3>
+          </div>
+          <div className="summary-stack">
             <div>
-              <p>🏷️ Top topics:</p>
-              <ul className="list-disc list-inside">
-                {details.top_topics.map(([topic, count], index) => (
-                  <li key={index}>
-                    {topic} ({count})
-                  </li>
-                ))}
-              </ul>
+              <span>Active repos</span>
+              <strong>{details.active_event_repos ?? 0}</strong>
             </div>
-            <p>🔀 Fork signal: {details.fork_signal}</p>
-          </div>
-          {details.pinned_repos && details.pinned_repos.length > 0 && (
-            <div className="mt-4">
-              <h3 className="text-lg font-semibold">📌 Pinned Repos:</h3>
-              <ul className="list-disc list-inside">
-                {details.pinned_repos.map((repo, index) => (
-                  <li key={index} className="mt-2">
-                    <strong>{repo.name}</strong>:{" "}
-                    {repo.description || "No description"}
-                    <br />
-                    Total commits: {repo.total_commits ?? 0}
-                    <br />
-                    Topics: {repo.topics.join(", ") || "None"}
-                    <br />
-                    Languages: {repo.languages.join(", ") || "None"}
-                  </li>
-                ))}
-              </ul>
+            <div>
+              <span>Activity level</span>
+              <strong>{details.activity_level || "Unknown"}</strong>
             </div>
-          )}
-          <div className="mt-4 rounded-md bg-gray-700 p-3">
-            <h3 className="text-lg font-medium">AI Insights:</h3>
-            <p className="mt-2">
-              Developer Type: {details.insights.developer_type}
-            </p>
-            <p className="mt-2">
-              Experience Signal: {details.insights.experience_signal}
-            </p>
-            <p className="mt-2">Summary: {details.insights.summary}</p>
-            <div className="mt-2">
-              <h4 className="font-medium">Strengths:</h4>
-              <ul className="list-disc list-inside">
-                {details.insights.strengths.map((s, i) => (
-                  <li key={i}>{s}</li>
-                ))}
-              </ul>
-            </div>
-            <div className="mt-2">
-              <h4 className="font-medium">Weaknesses:</h4>
-              <ul className="list-disc list-inside">
-                {details.insights.weaknesses.map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="mt-2">
-              <h4 className="font-medium">Highlights of Profile:</h4>
-              <p>{details.insights.highlights_of_profile}</p>
-            </div>
-            <div className="mt-2">
-              <h4 className="font-medium">Recommendation:</h4>
-              <p>{details.insights.recommendation}</p>
-            </div>
-            <div className="mt-2">
-              <h4 className="font-medium">Confidence:</h4>
-              <p>{details.insights.confidence}</p>
+            <div>
+              <span>Fork signal</span>
+              <strong>{details.fork_signal || "Unknown"}</strong>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        </article>
+      </aside>
+    </section>
   );
+}
+
+function InsightsView({ details }) {
+  return (
+    <section className="dashboard-insights-view">
+      <InsightsPanel insights={details.insights} />
+    </section>
+  );
+}
+
+function ProjectsView({ details }) {
+  return (
+    <section className="dashboard-projects-view">
+      <PinnedReposPanel repos={details.pinned_repos} />
+    </section>
+  );
+}
+
+function Analyze({ details, activeView = "overview" }) {
+  if (activeView === "insights") {
+    return <InsightsView details={details} />;
+  }
+
+  if (activeView === "projects") {
+    return <ProjectsView details={details} />;
+  }
+
+  return <OverviewView details={details} />;
 }
 
 export default Analyze;

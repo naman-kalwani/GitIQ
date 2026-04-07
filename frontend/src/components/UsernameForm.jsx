@@ -1,33 +1,31 @@
-import React from 'react'
 import { useState } from "react";
 
-const UsernameForm = ({ getUser }) => {
+const UsernameForm = ({ getUser, submitLabel = "Analyze" }) => {
   const [username, setUsername] = useState("");
+
   const handleSubmit = (event) => {
     event.preventDefault();
-    if (username.trim() !== '' && getUser) {
+    if (username.trim() !== "" && getUser) {
       getUser(username.trim());
-      setUsername('');
+      setUsername("");
     }
-  }
+  };
+
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className="username-form">
       <input
         type="text"
-        placeholder="Enter GitHub username"
+        placeholder="github_username"
         value={username}
-        className="bg-gray-700 border-2 border-gray-500 px-2 py-2 mt-4 "
+        className="username-input"
         onChange={(e) => setUsername(e.target.value)}
       />
 
-      <button
-        className="border-2 border-gray-500 px-4 py-2 hover:bg-gray-700"
-        type='submit'
-      >
-        Analyze
+      <button className="username-button" type="submit">
+        {submitLabel}
       </button>
     </form>
   );
-}
+};
 
-export default UsernameForm
+export default UsernameForm;
