@@ -63,29 +63,29 @@ function InsightCharts({ details }) {
   const commitCount = toNumber(details.top_repo?.total_commits);
 
   return (
-    <section className="signal-strip">
-      <article className="signal-card ring-card">
-        <div className="card-head">
-          <p className="section-kicker">Signal</p>
+    <section>
+      <article>
+        <div>
+          <p>Signal</p>
           <h3>Activity score</h3>
         </div>
-        <div className="ring-wrap">
+        <div>
           <div
-            className="chart-ring"
+           
             style={{ "--value": activityScore, "--accent": "#58a6ff" }}
             aria-label={`Activity score ${activityScore} out of 100`}
           >
-            <div className="chart-ring-inner">
+            <div>
               <strong>{activityScore}</strong>
               <span>score</span>
             </div>
           </div>
-          <div className="ring-copy">
+          <div>
             <p>
               Public repos, stars, and recent events combined into a single
               profile pulse.
             </p>
-            <div className="mini-stats">
+            <div>
               <span>{details.total_repos ?? 0} repos</span>
               <span>{details.total_stars ?? 0} stars</span>
               <span>{details.total_events ?? 0} events</span>
@@ -94,25 +94,25 @@ function InsightCharts({ details }) {
         </div>
       </article>
 
-      <article className="signal-card bar-card">
-        <div className="card-head">
-          <p className="section-kicker">Mix</p>
+      <article>
+        <div>
+          <p>Mix</p>
           <h3>Language distribution</h3>
         </div>
-        <div className="bar-chart">
+        <div>
           {languageEntries.length ? (
             languageEntries.slice(0, 6).map((entry) => {
               const width = Math.max(8, (entry.value / languageTotal) * 100);
 
               return (
-                <div className="bar-row" key={entry.label}>
-                  <div className="bar-labels">
+                <div key={entry.label}>
+                  <div>
                     <span>{entry.label}</span>
                     <strong>{entry.value}</strong>
                   </div>
-                  <div className="bar-track">
+                  <div>
                     <div
-                      className="bar-fill language-fill"
+                     
                       style={{ width: `${width}%` }}
                     />
                   </div>
@@ -120,17 +120,17 @@ function InsightCharts({ details }) {
               );
             })
           ) : (
-            <div className="empty-chart">No language data available yet.</div>
+            <div>No language data available yet.</div>
           )}
         </div>
       </article>
 
-      <article className="signal-card bar-card">
-        <div className="card-head">
-          <p className="section-kicker">Rhythm</p>
+      <article>
+        <div>
+          <p>Rhythm</p>
           <h3>Event activity</h3>
         </div>
-        <div className="bar-chart compact">
+        <div>
           {eventEntries.length ? (
             eventEntries.slice(0, 5).map((entry, index) => {
               const width = Math.max(10, (entry.value / eventTotal) * 100);
@@ -143,14 +143,14 @@ function InsightCharts({ details }) {
               ];
 
               return (
-                <div className="bar-row compact-row" key={entry.label}>
-                  <div className="bar-labels">
+                <div key={entry.label}>
+                  <div>
                     <span>{entry.label}</span>
                     <strong>{entry.value}</strong>
                   </div>
-                  <div className="bar-track">
+                  <div>
                     <div
-                      className="bar-fill"
+                     
                       style={{
                         width: `${width}%`,
                         background: palette[index % palette.length],
@@ -161,42 +161,42 @@ function InsightCharts({ details }) {
               );
             })
           ) : (
-            <div className="empty-chart">No event data available yet.</div>
+            <div>No event data available yet.</div>
           )}
         </div>
       </article>
 
-      <article className="signal-card repo-card">
-        <div className="card-head">
-          <p className="section-kicker">Focus</p>
+      <article>
+        <div>
+          <p>Focus</p>
           <h3>Top repository</h3>
         </div>
-        <div className="repo-pulse">
-          <div className="repo-pulse-top">
+        <div>
+          <div>
             <strong>{details.top_repo?.name || "No top repo"}</strong>
             <span>{topRepoStars} stars</span>
           </div>
-          <div className="repo-pulse-bars">
-            <div className="repo-pulse-bar">
+          <div>
+            <div>
               <span>Commits</span>
-              <div className="bar-track slim">
+              <div>
                 <div
-                  className="bar-fill repo-fill"
+                 
                   style={{ width: `${clamp(commitCount * 8, 14, 100)}%` }}
                 />
               </div>
             </div>
-            <div className="repo-pulse-bar">
+            <div>
               <span>Star signal</span>
-              <div className="bar-track slim">
+              <div>
                 <div
-                  className="bar-fill repo-fill alt"
+                 
                   style={{ width: `${clamp(topRepoStars * 6, 12, 100)}%` }}
                 />
               </div>
             </div>
           </div>
-          <div className="mini-stats repo-stats">
+          <div>
             <span>{details.fork_signal || "Fork signal n/a"}</span>
             <span>
               {details.has_org_experience
@@ -211,3 +211,4 @@ function InsightCharts({ details }) {
 }
 
 export default InsightCharts;
+

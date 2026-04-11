@@ -86,44 +86,57 @@ function OverviewView({ details }) {
     languageEntries.reduce((sum, [, value]) => sum + toNumber(value), 0) || 1;
 
   return (
-    <section className="dashboard-overview">
-      <div className="dashboard-grid">
-        <article className="panel panel-score">
-          <div className="panel-head">
-            <p className="section-kicker">Signal</p>
-            <h3>Activity score</h3>
+    <section className="grid gap-4 lg:grid-cols-[1.65fr_1fr]">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 sm:col-span-2">
+          <div className="mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
+              Signal
+            </p>
+            <h3 className="text-lg font-semibold text-white">Activity score</h3>
           </div>
-          <div className="score-layout">
+          <div className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
             <div
-              className="score-ring"
-              style={{ "--score": activityScore }}
+              className="grid h-28 w-28 place-items-center rounded-full border-8 border-cyan-400/30 bg-slate-950"
               aria-label={`Activity score ${activityScore} out of 100`}
             >
-              <div className="score-ring-inner">
-                <strong>{activityScore}</strong>
-                <span>score</span>
+              <div className="grid text-center">
+                <strong className="text-3xl font-bold text-white">
+                  {activityScore}
+                </strong>
+                <span className="text-xs uppercase tracking-widest text-slate-400">
+                  score
+                </span>
               </div>
             </div>
-            <div className="score-copy">
-              <p>
+            <div className="grid gap-3">
+              <p className="text-sm text-slate-400">
                 A combined signal from repo count, stars, active events, and org
                 exposure.
               </p>
-              <div className="metric-pills">
-                <span>{details.total_repos ?? 0} repos</span>
-                <span>{details.total_stars ?? 0} stars</span>
-                <span>{details.total_events ?? 0} events</span>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-300">
+                  {details.total_repos ?? 0} repos
+                </span>
+                <span className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-300">
+                  {details.total_stars ?? 0} stars
+                </span>
+                <span className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-300">
+                  {details.total_events ?? 0} events
+                </span>
               </div>
             </div>
           </div>
         </article>
 
-        <article className="panel panel-languages">
-          <div className="panel-head">
-            <p className="section-kicker">Mix</p>
-            <h3>Top languages</h3>
+        <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <div className="mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
+              Mix
+            </p>
+            <h3 className="text-lg font-semibold text-white">Top languages</h3>
           </div>
-          <div className="bar-list compact">
+          <div className="grid gap-3">
             {languageEntries.length ? (
               languageEntries.slice(0, 5).map(([language, value], index) => {
                 const width = Math.max(
@@ -132,14 +145,16 @@ function OverviewView({ details }) {
                 );
 
                 return (
-                  <div className="bar-row" key={`${language}-${index}`}>
-                    <div className="bar-row-meta">
-                      <span>{language}</span>
-                      <strong>{Math.round(width)}%</strong>
+                  <div key={`${language}-${index}`} className="grid gap-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-300">{language}</span>
+                      <strong className="text-white">
+                        {Math.round(width)}%
+                      </strong>
                     </div>
-                    <div className="bar-track slim">
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-800">
                       <div
-                        className="bar-fill language-fill"
+                        className="h-full rounded-full bg-cyan-400"
                         style={{ width: `${width}%` }}
                       />
                     </div>
@@ -147,96 +162,134 @@ function OverviewView({ details }) {
                 );
               })
             ) : (
-              <p className="empty-copy">No language data available.</p>
+              <p className="text-sm text-slate-500">
+                No language data available.
+              </p>
             )}
           </div>
         </article>
 
-        <article className="panel panel-topics">
-          <div className="panel-head">
-            <p className="section-kicker">Signals</p>
-            <h3>Top topics</h3>
+        <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <div className="mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
+              Signals
+            </p>
+            <h3 className="text-lg font-semibold text-white">Top topics</h3>
           </div>
-          <div className="tag-list dense">
+          <div className="flex flex-wrap gap-2">
             {topTopics.length ? (
               topTopics.map(([topic, count]) => (
-                <span className="tag" key={topic}>
+                <span
+                  key={topic}
+                  className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-300"
+                >
                   {topic} · {count}
                 </span>
               ))
             ) : (
-              <p className="empty-copy">No topic data available.</p>
+              <p className="text-sm text-slate-500">No topic data available.</p>
             )}
           </div>
         </article>
 
-        <section className="panel panel-accordion panel-accordion-open">
-          <div className="panel-accordion-head">
-            <p className="section-kicker">Advanced analytics</p>
-            <h3>Detailed signals</h3>
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 sm:col-span-2">
+          <div className="mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
+              Advanced analytics
+            </p>
+            <h3 className="text-lg font-semibold text-white">
+              Detailed signals
+            </h3>
           </div>
 
-          <div className="analytics-grid">
-            <div className="analytics-item">
-              <span>Total events</span>
-              <strong>{details.total_events ?? 0}</strong>
+          <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+              <span className="text-xs uppercase tracking-wider text-slate-500">
+                Total events
+              </span>
+              <strong className="mt-1 block text-lg text-white">
+                {details.total_events ?? 0}
+              </strong>
             </div>
-            <div className="analytics-item">
-              <span>Last active</span>
-              <strong>{formatLatestActivity(details.latest_event_at)}</strong>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+              <span className="text-xs uppercase tracking-wider text-slate-500">
+                Last active
+              </span>
+              <strong className="mt-1 block text-lg text-white">
+                {formatLatestActivity(details.latest_event_at)}
+              </strong>
             </div>
-            <div className="analytics-item">
-              <span>Avg gap</span>
-              <strong>{formatGap(details.avg_event_gap_seconds)}</strong>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+              <span className="text-xs uppercase tracking-wider text-slate-500">
+                Avg gap
+              </span>
+              <strong className="mt-1 block text-lg text-white">
+                {formatGap(details.avg_event_gap_seconds)}
+              </strong>
             </div>
-            <div className="analytics-item analytics-item-wide">
-              <span>Fork ratio</span>
-              <strong>{details.fork_signal || "Unknown"}</strong>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+              <span className="text-xs uppercase tracking-wider text-slate-500">
+                Fork ratio
+              </span>
+              <strong className="mt-1 block text-lg text-white">
+                {details.fork_signal || "Unknown"}
+              </strong>
             </div>
           </div>
 
-          <div className="analytics-event-list">
+          <div className="grid gap-2">
             {(details.top_events || []).map(([eventName, count]) => (
-              <div className="analytics-event-row" key={eventName}>
-                <span>{eventName}</span>
-                <strong>{count}</strong>
+              <div
+                key={eventName}
+                className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm"
+              >
+                <span className="text-slate-300">{eventName}</span>
+                <strong className="text-white">{count}</strong>
               </div>
             ))}
           </div>
         </section>
       </div>
 
-      <aside className="overview-rail">
-        <article className="panel panel-repo">
-          <div className="panel-head">
-            <p className="section-kicker">Focus</p>
-            <h3>Top repository</h3>
+      <aside className="grid gap-4">
+        <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <div className="mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
+              Focus
+            </p>
+            <h3 className="text-lg font-semibold text-white">Top repository</h3>
           </div>
-          <div className="repo-feature">
-            <strong>{details.top_repo?.name || "No top repo"}</strong>
-            <div className="repo-badge">⭐ {details.top_repo?.stars ?? 0}</div>
-            <p>
+          <div className="grid gap-2">
+            <strong className="text-white">
+              {details.top_repo?.name || "No top repo"}
+            </strong>
+            <div className="w-fit rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-xs text-amber-200">
+              ⭐ {details.top_repo?.stars ?? 0}
+            </div>
+            <p className="text-sm text-slate-400">
               {details.top_repo?.description || "No description available."}
             </p>
           </div>
         </article>
 
-        <article className="panel panel-org">
-          <div className="panel-head">
-            <p className="section-kicker">Collaboration</p>
-            <h3>Org experience</h3>
+        <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <div className="mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
+              Collaboration
+            </p>
+            <h3 className="text-lg font-semibold text-white">Org experience</h3>
           </div>
-          <div className="status-card-mini">
+          <div className="grid gap-2">
             <span
-              className={
+              className={`w-fit rounded-full px-3 py-1 text-xs font-medium ${
                 details.has_org_experience
-                  ? "status-mark yes"
-                  : "status-mark no"
-              }
+                  ? "border border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                  : "border border-amber-400/40 bg-amber-400/10 text-amber-300"
+              }`}
             >
               {details.has_org_experience ? "Yes" : "No"}
             </span>
-            <p>
+            <p className="text-sm text-slate-400">
               {details.has_org_experience
                 ? "Evidence of organizational work and team-oriented activity."
                 : "No clear org signals detected in the available profile data."}
@@ -244,23 +297,31 @@ function OverviewView({ details }) {
           </div>
         </article>
 
-        <article className="panel panel-activity">
-          <div className="panel-head">
-            <p className="section-kicker">Activity</p>
-            <h3>Summary</h3>
+        <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <div className="mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
+              Activity
+            </p>
+            <h3 className="text-lg font-semibold text-white">Summary</h3>
           </div>
-          <div className="summary-stack">
-            <div>
-              <span>Active repos</span>
-              <strong>{details.active_event_repos ?? 0}</strong>
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm">
+              <span className="text-slate-400">Active repos</span>
+              <strong className="text-white">
+                {details.active_event_repos ?? 0}
+              </strong>
             </div>
-            <div>
-              <span>Activity level</span>
-              <strong>{details.activity_level || "Unknown"}</strong>
+            <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm">
+              <span className="text-slate-400">Activity level</span>
+              <strong className="text-white">
+                {details.activity_level || "Unknown"}
+              </strong>
             </div>
-            <div>
-              <span>Fork signal</span>
-              <strong>{details.fork_signal || "Unknown"}</strong>
+            <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm">
+              <span className="text-slate-400">Fork signal</span>
+              <strong className="text-white">
+                {details.fork_signal || "Unknown"}
+              </strong>
             </div>
           </div>
         </article>
@@ -271,7 +332,7 @@ function OverviewView({ details }) {
 
 function InsightsView({ details }) {
   return (
-    <section className="dashboard-insights-view">
+    <section>
       <InsightsPanel insights={details.insights} />
     </section>
   );
@@ -279,7 +340,7 @@ function InsightsView({ details }) {
 
 function ProjectsView({ details }) {
   return (
-    <section className="dashboard-projects-view">
+    <section>
       <PinnedReposPanel repos={details.pinned_repos} />
     </section>
   );

@@ -111,18 +111,29 @@ function App() {
   ];
 
   return (
-    <div className="app-shell">
-      <main className="site-shell">
-        <header className="site-header">
-          <div className="brand-wrap">
-            <div className="brand">GitIQ</div>
-            <p className="brand-subtitle">Retro profile radar terminal</p>
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(56,189,248,0.18),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(168,85,247,0.16),transparent_30%)]" />
+      <main className="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
+        <header className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800/70 bg-slate-900/70 px-4 py-3 shadow-lg shadow-slate-950/50 backdrop-blur-xl">
+          <div>
+            <div className="text-xl font-semibold tracking-tight">GitIQ</div>
+            <p className="text-sm text-slate-400">
+              Modern GitHub profile intelligence
+            </p>
           </div>
-          <nav className="site-nav" aria-label="primary">
-            <button type="button" onClick={() => setPage("home")}>
+          <nav aria-label="primary" className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setPage("home")}
+              className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium transition hover:border-cyan-400/60 hover:text-cyan-300"
+            >
               Home
             </button>
-            <button type="button" onClick={() => setPage("access")}>
+            <button
+              type="button"
+              onClick={() => setPage("access")}
+              className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium transition hover:border-cyan-400/60 hover:text-cyan-300"
+            >
               Scan
             </button>
             <button
@@ -134,6 +145,7 @@ function App() {
                 }
               }}
               disabled={!details}
+              className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium transition hover:border-cyan-400/60 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Dashboard
             </button>
@@ -141,83 +153,76 @@ function App() {
         </header>
 
         {page === "home" && (
-          <section className="page-home">
-            <section className="hero hero-retro">
-              <div className="hero-terminal">
-                <div className="terminal-header">
-                  <span className="terminal-button close">●</span>
-                  <span className="terminal-button minimize">●</span>
-                  <span className="terminal-button maximize">●</span>
-                  <span className="terminal-title">gitiq.dashboard</span>
+          <section className="grid gap-6">
+            <section className="grid gap-6 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/80 shadow-xl shadow-slate-950/60">
+                <div className="flex items-center gap-2 border-b border-slate-800 px-4 py-3 text-xs text-slate-400">
+                  <span className="text-rose-400">●</span>
+                  <span className="text-amber-400">●</span>
+                  <span className="text-emerald-400">●</span>
+                  <span className="ml-2 tracking-wide">gitiq.dashboard</span>
                 </div>
-                <div className="terminal-content">
-                  <div className="terminal-line">
-                    <span className="prompt">$</span> load github profile
-                    telemetry
+                <div className="space-y-2 p-4 font-mono text-sm text-slate-300">
+                  <div>
+                    <span className="mr-2 text-cyan-300">$</span> load github
+                    profile telemetry
                   </div>
-                  <div className="terminal-line">
-                    <span className="prompt">&gt;</span>{" "}
-                    <span className="typing-text">
+                  <div>
+                    <span className="mr-2 text-fuchsia-300">&gt;</span>{" "}
+                    <span className="text-slate-200">
                       initializing scan matrix and signal capture
                     </span>
                   </div>
-                  <div className="terminal-line empty"></div>
-                  <div className="terminal-line">
-                    <span className="prompt">$</span> run profile scanner
-                    protocol
+                  <div className="h-1" />
+                  <div>
+                    <span className="mr-2 text-cyan-300">$</span> run profile
+                    scanner protocol
                   </div>
-                  <div className="terminal-line">
-                    <span className="prompt">&gt;</span> collecting activity,
-                    repo frequencies, language bands, and AI briefing.
+                  <div>
+                    <span className="mr-2 text-fuchsia-300">&gt;</span>{" "}
+                    collecting activity, repo frequencies, language bands, and
+                    AI briefing.
                   </div>
                 </div>
               </div>
 
-              <div className="hero-copy">
-                <h1 className="hero-title">
-                  <span className="glitch" data-glitch="Retro Dev Scanner">
-                    Retro Dev Scanner
+              <div className="flex flex-col justify-center gap-5">
+                <h1 className="flex flex-col gap-2">
+                  <span className="text-4xl font-bold tracking-tight text-white sm:text-5xl">
+                    GitIQ Signal Studio
                   </span>
-                  <span className="sub-glow">
-                    arcade HUD for GitHub signals
+                  <span className="text-base font-medium text-cyan-300 sm:text-lg">
+                    Aesthetic dark analytics for developer profiles
                   </span>
                 </h1>
-                <p className="hero-subtitle">
-                  Enter a GitHub username and GitIQ runs a CRT-style scan that
+                <p className="max-w-2xl text-slate-300">
+                  Enter a GitHub username and GitIQ runs a high-signal scan that
                   maps public activity into repo signals, language bands,
                   highlighted projects, and an AI mission brief.
                 </p>
 
-                <div className="hero-features">
-                  <div className="feature">
-                    <span className="feature-icon">◆</span>
-                    <span className="feature-text">
-                      Live radar profile sweep
-                    </span>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
+                    ◆ Live radar profile sweep
                   </div>
-                  <div className="feature">
-                    <span className="feature-icon">◆</span>
-                    <span className="feature-text">
-                      Repo and language frequency maps
-                    </span>
+                  <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
+                    ◆ Repo and language frequency maps
                   </div>
-                  <div className="feature">
-                    <span className="feature-icon">◆</span>
-                    <span className="feature-text">AI command summary</span>
+                  <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 sm:col-span-2">
+                    ◆ AI command summary
                   </div>
                 </div>
 
-                <div className="hero-actions">
+                <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
                     onClick={() => setPage("access")}
-                    className="btn-primary"
+                    className="rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
                   >
                     → Start Scan
                   </button>
                   <button
                     type="button"
-                    className="btn-secondary"
                     onClick={() => {
                       if (details) {
                         setDashboardView("insights");
@@ -225,6 +230,7 @@ function App() {
                       }
                     }}
                     disabled={!details}
+                    className="rounded-xl border border-slate-700 bg-slate-800 px-5 py-2.5 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/60 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     View Insights
                   </button>
@@ -232,47 +238,63 @@ function App() {
               </div>
             </section>
 
-            <section className="hero-section">
-              <h2 className="section-title neon-cyan">How it works</h2>
-              <div className="flow-grid">
-                <div className="flow-item">
-                  <div className="flow-number">01</div>
+            <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+              <h2 className="mb-4 text-xl font-semibold text-white">
+                How it works
+              </h2>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+                  <div className="mb-2 text-sm font-semibold text-cyan-300">
+                    01
+                  </div>
                   <h3>Enter a username</h3>
-                  <p>Use any public GitHub profile name.</p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    Use any public GitHub profile name.
+                  </p>
                 </div>
-                <div className="flow-item">
-                  <div className="flow-number">02</div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+                  <div className="mb-2 text-sm font-semibold text-cyan-300">
+                    02
+                  </div>
                   <h3>Run the scan</h3>
-                  <p>GitIQ processes repos, commits, topics, and languages.</p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    GitIQ processes repos, commits, topics, and languages.
+                  </p>
                 </div>
-                <div className="flow-item">
-                  <div className="flow-number">03</div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+                  <div className="mb-2 text-sm font-semibold text-cyan-300">
+                    03
+                  </div>
                   <h3>Read the dashboard</h3>
-                  <p>Review the summary, repository cards, and AI insights.</p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    Review the summary, repository cards, and AI insights.
+                  </p>
                 </div>
               </div>
             </section>
 
-            <section className="hero-section alt">
-              <h2 className="section-title neon-magenta">Why GitIQ</h2>
-              <div className="reasons-grid">
-                <div className="reason-card">
+            <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+              <h2 className="mb-4 text-xl font-semibold text-white">
+                Why GitIQ
+              </h2>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
                   <h4>Focused analysis</h4>
-                  <p>
+                  <p className="mt-2 text-sm text-slate-400">
                     GitHub activity is translated into a cleaner, more useful
                     profile signal.
                   </p>
                 </div>
-                <div className="reason-card">
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
                   <h4>AI insights</h4>
-                  <p>
+                  <p className="mt-2 text-sm text-slate-400">
                     Get a concise readout of strengths, weaknesses, and
                     developer type.
                   </p>
                 </div>
-                <div className="reason-card">
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
                   <h4>Fast results</h4>
-                  <p>
+                  <p className="mt-2 text-sm text-slate-400">
                     Your last scan persists locally so you can return to the
                     dashboard instantly.
                   </p>
@@ -283,36 +305,36 @@ function App() {
         )}
 
         {page === "access" && (
-          <section className="page-access">
-            <div className="scanner-section">
-              <div className="scanner-header">
-                <h2 className="scanner-title">
-                  <span className="title-glow">Boot scanner</span>
+          <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+            <div className="grid gap-5">
+              <div className="grid gap-2">
+                <h2 className="text-2xl font-semibold text-white">
+                  <span>Boot scanner</span>
                 </h2>
-                <p className="scanner-subtitle">
+                <p className="max-w-3xl text-slate-400">
                   Input a GitHub handle to run a full telemetry sweep and
                   generate a mission-ready profile snapshot.
                 </p>
               </div>
 
-              <div className="scanner-input-wrapper">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
                 <SearchPanel onAnalyze={runAnalyze} submitLabel="EXECUTE" />
               </div>
 
               {loading && (
-                <div className="scanner-status scanning">
-                  <div className="scan-dot">
-                    <span></span>
-                    <span></span>
-                    <span></span>
+                <div className="flex items-center gap-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-cyan-200">
+                  <div className="flex gap-1">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300 [animation-delay:120ms]" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300 [animation-delay:240ms]" />
                   </div>
                   <span>Scanning {username}...</span>
                 </div>
               )}
 
               {error && (
-                <div className="scanner-status error-state">
-                  <span className="error-icon">⚠</span>
+                <div className="flex items-center gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-rose-200">
+                  <span>⚠</span>
                   <span>{error}</span>
                 </div>
               )}
@@ -321,38 +343,45 @@ function App() {
         )}
 
         {page === "dashboard" && details && (
-          <section className="page-dashboard">
-            <div className="dashboard-header">
-              <div className="dashboard-copy">
-                <p className="section-kicker dashboard-kicker">Overview</p>
-                <h1>Analysis Dashboard</h1>
-                <p>
+          <section className="grid gap-5">
+            <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+              <div className="grid gap-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
+                  Overview
+                </p>
+                <h1 className="text-2xl font-semibold text-white sm:text-3xl">
+                  Analysis Dashboard
+                </h1>
+                <p className="max-w-3xl text-sm text-slate-400">
                   High-signal metrics first, detailed analytics behind a
                   collapsible section, and AI insights kept in a dedicated view.
                 </p>
               </div>
 
-              <div className="dashboard-user-card">
-                <div className="dashboard-avatar" aria-hidden="true">
+              <div className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                <div
+                  aria-hidden="true"
+                  className="grid h-10 w-10 place-items-center rounded-full bg-cyan-500/20 text-sm font-semibold text-cyan-300"
+                >
                   {details.username?.slice(0, 1)?.toUpperCase() || "G"}
                 </div>
-                <div className="dashboard-user-copy">
+                <div className="grid">
                   <strong>{details.username}</strong>
-                  <span>
+                  <span className="text-sm text-slate-400">
                     {details.activity_level
                       ? `${details.activity_level} activity`
                       : "Profile summary"}
                   </span>
                 </div>
-                <div className="dashboard-status-pill">
-                  <span className="status-dot" />
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
+                  <span className="h-2 w-2 rounded-full bg-emerald-300" />
                   <span>{details.activity_level || "Active"}</span>
                 </div>
               </div>
             </div>
 
             <div
-              className="dashboard-tabs"
+              className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-3"
               role="tablist"
               aria-label="Dashboard views"
             >
@@ -360,17 +389,29 @@ function App() {
                 <button
                   key={tab.id}
                   type="button"
-                  className={dashboardView === tab.id ? "is-active" : ""}
+                  className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+                    dashboardView === tab.id
+                      ? "bg-cyan-500 text-slate-950"
+                      : "border border-slate-700 bg-slate-800 text-slate-200 hover:border-cyan-400/60 hover:text-cyan-300"
+                  }`}
                   onClick={() => setDashboardView(tab.id)}
                 >
                   {tab.label}
                 </button>
               ))}
-              <div className="dashboard-actions">
-                <button type="button" onClick={() => setPage("access")}>
+              <div className="ml-auto flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage("access")}
+                  className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-300"
+                >
                   Run again
                 </button>
-                <button type="button" className="ghost" onClick={clearSession}>
+                <button
+                  type="button"
+                  onClick={clearSession}
+                  className="rounded-xl border border-rose-400/50 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition hover:bg-rose-500/20"
+                >
                   Clear session
                 </button>
               </div>
@@ -381,14 +422,14 @@ function App() {
         )}
 
         {page === "dashboard" && !details && (
-          <section className="page-access">
-            <div className="status-card status-loading">
+          <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+            <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-amber-200">
               No saved insights found yet. Run analyze first.
             </div>
           </section>
         )}
 
-        <footer className="site-footer">
+        <footer className="mt-6 border-t border-slate-800 pt-4 text-center text-xs text-slate-500">
           <span>Powered by GitHub profile and repository activity</span>
         </footer>
       </main>

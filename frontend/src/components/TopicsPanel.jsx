@@ -1,11 +1,11 @@
 function TopicsPanel({ topics }) {
   return (
-    <section className="content-section topics-section">
-      <div className="section-head">
-        <p className="section-kicker">Signals</p>
+    <section>
+      <div>
+        <p>Signals</p>
         <h3>Top Topics</h3>
       </div>
-      <ul className="ranked-list">
+      <ul>
         {topics.map(([topic, count], index) => (
           <li key={index}>
             <span>{topic}</span>
@@ -18,3 +18,4 @@ function TopicsPanel({ topics }) {
 }
 
 export default TopicsPanel;
+
