@@ -1,4 +1,6 @@
-import PinnedReposPanel from "./PinnedReposPanel.jsx";
+import { useMemo, useState } from "react";
+import api from "../api";
+import DetailAnalysis from "./DetailAnalysis.jsx";
 import InsightsPanel from "./InsightsPanel.jsx";
 
 function toNumber(value) {
@@ -312,10 +314,134 @@ function InsightsView({ details }) {
   );
 }
 
-function ProjectsView({ details }) {
+function ExtraRepoCards({ repos }) {
+  if (!repos.length) {
+    return null;
+  }
+
   return (
-    <section>
-      <PinnedReposPanel repos={details.pinned_repos} />
+    <section className="grid gap-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+      <div className="grid gap-1">
+        <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
+          Repo cards
+        </p>
+        <h3 className="text-2xl font-semibold text-white">More repositories</h3>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {repos.map((repo) => {
+          const raw = repo.raw_data_json || {};
+          const llm = repo.llm_insights_json || {};
+          const languages = raw.languages || [];
+          const topics = raw.topics || [];
+
+          return (
+            <article
+              key={`${repo.repo_name}-${repo.created_at}`}
+              className="grid gap-2 rounded-xl border border-slate-800 bg-slate-950/70 p-4"
+            >
+              <strong className="text-white">{repo.repo_name}</strong>
+              <p className="text-xs text-slate-400">
+                {raw.description || "No description available."}
+              </p>
+              <div className="text-xs text-slate-400">
+                <div>⭐ {raw.stars ?? 0}</div>
+                <div>Primary: {raw.primary_language || "Unknown"}</div>
+                <div>Languages: {languages.join(", ") || "None"}</div>
+                <div>Topics: {topics.join(", ") || "None"}</div>
+              </div>
+              <div className="text-xs text-cyan-200">
+                {llm.pinned_summary?.summary || "Insight pending"}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ProjectsView({ details }) {
+  const [extraRepos, setExtraRepos] = useState([]);
+  const [nextOffset, setNextOffset] = useState(0);
+  const [totalRepos, setTotalRepos] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState("");
+
+  const pinnedNamesCsv = useMemo(
+    () => (details.pinned_repos || []).map((repo) => repo.name).join(","),
+    [details.pinned_repos],
+  );
+
+  const loadMoreRepos = async () => {
+    if (loadingMore) {
+      return;
+    }
+
+    setLoadingMore(true);
+    setLoadError("");
+
+    try {
+      const response = await api.get(`/repo-analyses/${details.username}`, {
+        params: {
+          offset: nextOffset,
+          limit: 5,
+          exclude_names: pinnedNamesCsv,
+        },
+      });
+
+      const items = response.data?.items || [];
+      setExtraRepos((prev) => [...prev, ...items]);
+      setTotalRepos(response.data?.total || 0);
+
+      if (
+        response.data?.next_offset === null ||
+        response.data?.next_offset === undefined
+      ) {
+        setNextOffset(-1);
+      } else {
+        setNextOffset(response.data.next_offset);
+      }
+    } catch (err) {
+      setLoadError(
+        err?.response?.data?.detail || "Failed to fetch more repositories.",
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const hasMore = nextOffset !== -1;
+
+  return (
+    <section className="grid gap-4">
+      <DetailAnalysis repos={details.pinned_repos} />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={loadMoreRepos}
+          disabled={loadingMore || !hasMore}
+          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/60 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {loadingMore
+            ? "Loading..."
+            : hasMore
+              ? "Fetch next 5 repos"
+              : "All repos loaded"}
+        </button>
+        <span className="text-xs text-slate-400">
+          Loaded {extraRepos.length} of {totalRepos || 0}
+        </span>
+      </div>
+
+      {loadError ? (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+          {loadError}
+        </div>
+      ) : null}
+
+      <ExtraRepoCards repos={extraRepos} />
     </section>
   );
 }

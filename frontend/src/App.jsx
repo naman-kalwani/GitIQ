@@ -7,6 +7,7 @@ import SearchPanel from "./components/SearchPanel";
 import { supabase } from "./lib/supabase";
 
 const STORAGE_KEY = "gitiq-analysis";
+const AUTH_SYNC_KEY = "gitiq-auth-sync";
 
 function App() {
   const [page, setPage] = useState("home");
@@ -19,6 +20,7 @@ function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
   const lastAutoAnalyzedRef = useRef("");
+  const authFlowInProgressRef = useRef(false);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -51,6 +53,8 @@ function App() {
       setSession(nextSession || null);
       if (!nextSession) {
         lastAutoAnalyzedRef.current = "";
+        authFlowInProgressRef.current = false;
+        sessionStorage.removeItem(AUTH_SYNC_KEY);
       }
     });
 
@@ -105,23 +109,34 @@ function App() {
       }
 
       const githubUsername = extractGithubUsername(session);
-      if (!githubUsername || lastAutoAnalyzedRef.current === githubUsername) {
+      const syncKey = `${session?.user?.id || "anon"}:${githubUsername}`;
+      const persistedSyncKey = sessionStorage.getItem(AUTH_SYNC_KEY);
+
+      if (
+        !githubUsername ||
+        lastAutoAnalyzedRef.current === syncKey ||
+        persistedSyncKey === syncKey ||
+        authFlowInProgressRef.current
+      ) {
         return;
       }
 
+      authFlowInProgressRef.current = true;
+      lastAutoAnalyzedRef.current = syncKey;
       setAuthError("");
 
       try {
         await persistGithubLogin(session, githubUsername);
+        sessionStorage.setItem(AUTH_SYNC_KEY, syncKey);
+        await runAnalyze(githubUsername);
       } catch (persistError) {
         setAuthError(
           persistError.message ||
             "Could not store GitHub login details in Supabase.",
         );
+      } finally {
+        authFlowInProgressRef.current = false;
       }
-
-      lastAutoAnalyzedRef.current = githubUsername;
-      await runAnalyze(githubUsername);
     };
 
     runAuthenticatedAnalyze();
@@ -217,6 +232,10 @@ function App() {
     const { error: signOutError } = await supabase.auth.signOut();
     if (signOutError) {
       setAuthError(signOutError.message || "Sign out failed.");
+    } else {
+      lastAutoAnalyzedRef.current = "";
+      authFlowInProgressRef.current = false;
+      sessionStorage.removeItem(AUTH_SYNC_KEY);
     }
 
     setAuthLoading(false);

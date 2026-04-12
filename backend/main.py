@@ -1,6 +1,6 @@
 import os
 import logging
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
@@ -189,7 +189,97 @@ def get_user_id_by_username(username: str) -> str | None:
     return None
 
 
-def persist_analysis_record(response_payload: AnalyzeResponse, user_id: str) -> None:
+def _build_repo_analysis_rows(
+    all_repos: list[dict],
+    pinned_repo_details: dict[str, dict],
+    analysis_id: str,
+    now_iso: str,
+) -> list[dict]:
+    rows_by_name: dict[str, dict] = {}
+
+    for repo in all_repos:
+        repo_name = repo.get("name")
+        if not repo_name:
+            continue
+
+        topics = [
+            topic_node.get("topic", {}).get("name")
+            for topic_node in repo.get("repositoryTopics", {}).get("nodes", [])
+            if topic_node.get("topic", {}).get("name")
+        ]
+        languages = [
+            lang_node.get("name")
+            for lang_node in repo.get("languages", {}).get("nodes", [])
+            if lang_node.get("name")
+        ]
+        is_pinned = repo_name in pinned_repo_details
+
+        rows_by_name[repo_name] = {
+            "analysis_id": analysis_id,
+            "repo_name": repo_name,
+            "readme_grade": None,
+            "commit_pattern": None,
+            "is_tutorial": any("tutorial" in topic.lower() for topic in topics),
+            "llm_insights_json": (
+                {
+                    "is_pinned": True,
+                    "pinned_summary": pinned_repo_details[repo_name],
+                }
+                if is_pinned
+                else {"is_pinned": False}
+            ),
+            "raw_data_json": {
+                "name": repo_name,
+                "is_pinned": is_pinned,
+                "is_fork": repo.get("isFork"),
+                "stars": repo.get("stargazerCount", 0),
+                "primary_language": repo.get("primaryLanguage", {}).get("name"),
+                "languages": languages,
+                "topics": topics,
+            },
+            "created_at": now_iso,
+        }
+
+    for repo_name, pinned_data in pinned_repo_details.items():
+        if repo_name in rows_by_name:
+            row = rows_by_name[repo_name]
+            row["raw_data_json"]["description"] = pinned_data.get("description")
+            row["raw_data_json"]["total_commits"] = pinned_data.get("total_commits", 0)
+            row["raw_data_json"]["recent_commits"] = pinned_data.get("recent_commits", [])
+            continue
+
+        topics = pinned_data.get("topics", [])
+        rows_by_name[repo_name] = {
+            "analysis_id": analysis_id,
+            "repo_name": repo_name,
+            "readme_grade": None,
+            "commit_pattern": None,
+            "is_tutorial": any("tutorial" in str(topic).lower() for topic in topics),
+            "llm_insights_json": {
+                "is_pinned": True,
+                "pinned_summary": pinned_data,
+            },
+            "raw_data_json": {
+                "name": repo_name,
+                "is_pinned": True,
+                "description": pinned_data.get("description"),
+                "topics": topics,
+                "languages": pinned_data.get("languages", []),
+                "total_commits": pinned_data.get("total_commits", 0),
+                "recent_commits": pinned_data.get("recent_commits", []),
+            },
+            "created_at": now_iso,
+        }
+
+    return list(rows_by_name.values())
+
+
+def persist_analysis_record(
+    response_payload: AnalyzeResponse,
+    user_id: str,
+    all_repos: list[dict],
+    pinned_repo_details: dict[str, dict],
+) -> None:
     now_iso = datetime.now(timezone.utc).isoformat()
     payload = response_payload.model_dump()
 
@@ -207,28 +297,36 @@ def persist_analysis_record(response_payload: AnalyzeResponse, user_id: str) -> 
         logger.warning("Supabase analyses insert returned no id; skipping repo_analyses.")
         return
 
-    repo_rows = [
-        {
-            "analysis_id": analysis_id,
-            "repo_name": repo.name,
-            "readme_grade": None,
-            "commit_pattern": None,
-            "is_tutorial": any("tutorial" in topic.lower() for topic in repo.topics),
-            "llm_insights_json": {
-                "developer_type": response_payload.insights.developer_type,
-                "summary": response_payload.insights.summary,
-            },
-            "raw_data_json": repo.model_dump(),
-            "created_at": now_iso,
-        }
-        for repo in response_payload.pinned_repos
-    ]
+    repo_rows = _build_repo_analysis_rows(
+        all_repos=all_repos,
+        pinned_repo_details=pinned_repo_details,
+        analysis_id=analysis_id,
+        now_iso=now_iso,
+    )
 
     if repo_rows:
         _safe_supabase_execute(
             "repo_analyses insert",
             supabase.table("repo_analyses").insert(repo_rows),
         )
+
+
+def get_latest_analysis_id_for_user(user_id: str) -> str | None:
+    try:
+        result = (
+            supabase.table("analyses")
+            .select("id")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(result, "data", None) or []
+        if rows:
+            return rows[0].get("id")
+    except Exception as exc:
+        logger.warning("Supabase analyses lookup failed: %s", exc)
+    return None
 
 @app.get("/", response_model=HomeResponse)
 def home() -> HomeResponse:
@@ -242,6 +340,54 @@ async def save_github_login(payload: GithubLoginRequest):
         return {"ok": True, "user_id": user_id, "github_username": github_username}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/repo-analyses/{username}")
+async def get_repo_analyses(
+    username: str,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=5, ge=1, le=25),
+    exclude_names: str | None = Query(default=None),
+):
+    user_id = get_user_id_by_username(username)
+    if not user_id:
+        raise HTTPException(status_code=404, detail="User not found in Supabase users table.")
+
+    analysis_id = get_latest_analysis_id_for_user(user_id)
+    if not analysis_id:
+        return {"items": [], "total": 0, "next_offset": None}
+
+    try:
+        result = (
+            supabase.table("repo_analyses")
+            .select("repo_name, readme_grade, commit_pattern, is_tutorial, llm_insights_json, raw_data_json, created_at")
+            .eq("analysis_id", analysis_id)
+            .execute()
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    rows = getattr(result, "data", None) or []
+    excluded = {
+        item.strip()
+        for item in (exclude_names or "").split(",")
+        if item and item.strip()
+    }
+
+    filtered_rows = [
+        row for row in rows if row.get("repo_name") and row.get("repo_name") not in excluded
+    ]
+    filtered_rows.sort(key=lambda row: row.get("repo_name", "").lower())
+
+    total = len(filtered_rows)
+    page_items = filtered_rows[offset : offset + limit]
+    next_offset = offset + limit if offset + limit < total else None
+
+    return {
+        "items": page_items,
+        "total": total,
+        "next_offset": next_offset,
+    }
 
 
 @app.get("/info/{username}")
@@ -335,12 +481,12 @@ async def analyze_user(username: str) -> AnalyzeResponse:
         topic_counter = Counter()
         forked_repos = 0
         for repo in all_repos:
-            total_stars += repo.get('stargazers', {}).get('totalCount', 0)
+            total_stars += repo.get('stargazerCount', 0)
             if repo['isFork']:
                 forked_repos += 1
                 continue
             languages = [l['name'] for l in repo.get('languages', {}).get('nodes', [])]
-            stars = repo.get('stargazers', {}).get('totalCount', 0)
+            stars = repo.get('stargazerCount', 0)
             weight = stars + 1
             for lang in languages:
                 language_counter[lang] += weight
@@ -396,9 +542,9 @@ async def analyze_user(username: str) -> AnalyzeResponse:
         )
 
         top_repo = (
-            max(all_repos, key=lambda x: x.get('stargazers', {}).get('totalCount', 0))
+            max(all_repos, key=lambda x: x.get('stargazerCount', 0))
             if all_repos
-            else {"name": "None", "stargazers": {"totalCount": 0}}
+            else {"name": "None", "stargazerCount": 0}
         )
         
         fork_signal = "unknown"
@@ -526,7 +672,7 @@ async def analyze_user(username: str) -> AnalyzeResponse:
             top_languages=top_languages,
             top_repo=TopRepo(
                 name=top_repo["name"],
-                stars=top_repo.get('stargazers', {}).get('totalCount', 0)
+                stars=top_repo.get('stargazerCount', 0)
             ),
             top_topics=top_topics,
             top_events=top_events,
@@ -543,7 +689,12 @@ async def analyze_user(username: str) -> AnalyzeResponse:
 
         owner_user_id = get_user_id_by_username(username)
         if owner_user_id:
-            persist_analysis_record(response_payload, owner_user_id)
+            persist_analysis_record(
+                response_payload=response_payload,
+                user_id=owner_user_id,
+                all_repos=all_repos,
+                pinned_repo_details=pinned_repos_dict,
+            )
         else:
             logger.info(
                 "Skipping persistence for username '%s' because no matching users.id was found.",
