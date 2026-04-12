@@ -75,3 +75,9 @@ class LLMInsightRequest(StrictBaseModel):
 	highlights: LLMHighlights
 	overall_pinned_commits: int = Field(ge=0)
 	pinned_repos_commit_history: dict[str, LLMPinnedRepoHighlight] = Field(default_factory=dict)
+
+
+class GithubLoginRequest(StrictBaseModel):
+	access_token: str = Field(min_length=1)
+	github_username: str | None = None
+	github_avatar_url: str | None = None

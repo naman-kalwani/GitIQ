@@ -16,39 +16,7 @@ function normalizePair(entry) {
   return { label: String(label ?? "Unknown"), value: toNumber(value) };
 }
 
-function buildActivityScore(details) {
-  const repoScore = toNumber(details.total_repos) * 4;
-  const starScore = toNumber(details.total_stars) * 2;
-  const eventScore = toNumber(details.total_events) * 1.8;
-  const repoTouchScore = toNumber(details.active_event_repos) * 3;
-
-  const activityBonus =
-    {
-      low: 8,
-      medium: 18,
-      high: 28,
-      very_high: 34,
-      extreme: 38,
-    }[String(details.activity_level || "").toLowerCase()] || 0;
-
-  const orgBonus = details.has_org_experience ? 10 : 0;
-
-  return clamp(
-    Math.round(
-      repoScore +
-        starScore +
-        eventScore +
-        repoTouchScore +
-        activityBonus +
-        orgBonus,
-    ),
-    12,
-    100,
-  );
-}
-
 function InsightCharts({ details }) {
-  const activityScore = buildActivityScore(details);
   const languageEntries = (details.top_languages || [])
     .map(normalizePair)
     .filter((entry) => entry.label);
@@ -67,28 +35,18 @@ function InsightCharts({ details }) {
       <article>
         <div>
           <p>Signal</p>
-          <h3>Activity score</h3>
+          <h3>Activity snapshot</h3>
         </div>
         <div>
-          <div
-           
-            style={{ "--value": activityScore, "--accent": "#58a6ff" }}
-            aria-label={`Activity score ${activityScore} out of 100`}
-          >
-            <div>
-              <strong>{activityScore}</strong>
-              <span>score</span>
-            </div>
-          </div>
           <div>
             <p>
-              Public repos, stars, and recent events combined into a single
-              profile pulse.
+              Snapshot of repos, stars, events, and active repository coverage.
             </p>
             <div>
               <span>{details.total_repos ?? 0} repos</span>
               <span>{details.total_stars ?? 0} stars</span>
               <span>{details.total_events ?? 0} events</span>
+              <span>{details.active_event_repos ?? 0} active repos</span>
             </div>
           </div>
         </div>
@@ -111,10 +69,7 @@ function InsightCharts({ details }) {
                     <strong>{entry.value}</strong>
                   </div>
                   <div>
-                    <div
-                     
-                      style={{ width: `${width}%` }}
-                    />
+                    <div style={{ width: `${width}%` }} />
                   </div>
                 </div>
               );
@@ -150,7 +105,6 @@ function InsightCharts({ details }) {
                   </div>
                   <div>
                     <div
-                     
                       style={{
                         width: `${width}%`,
                         background: palette[index % palette.length],
@@ -180,17 +134,13 @@ function InsightCharts({ details }) {
             <div>
               <span>Commits</span>
               <div>
-                <div
-                 
-                  style={{ width: `${clamp(commitCount * 8, 14, 100)}%` }}
-                />
+                <div style={{ width: `${clamp(commitCount * 8, 14, 100)}%` }} />
               </div>
             </div>
             <div>
               <span>Star signal</span>
               <div>
                 <div
-                 
                   style={{ width: `${clamp(topRepoStars * 6, 12, 100)}%` }}
                 />
               </div>
@@ -211,4 +161,3 @@ function InsightCharts({ details }) {
 }
 
 export default InsightCharts;
-

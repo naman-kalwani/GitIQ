@@ -1,24 +1,25 @@
 import os
+import logging
 from fastapi import FastAPI, HTTPException
 import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 from dotenv import load_dotenv
-from pydantic import BaseModel
 from collections import Counter
+from typing import Any
 
 from datetime import datetime, timezone
-from typing import List
-import json
 
 from models.responseModels import AnalyzeResponse, HomeResponse, TopRepo, PinnedRepo, CommitEntry
-from models.requestModels import LLMInsightRequest
+from models.requestModels import LLMInsightRequest, GithubLoginRequest
 from insights import generate_insights, InsightResponse
+from db import supabase
 
 load_dotenv()
 
 app = FastAPI()
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+logger = logging.getLogger("gitiq")
 origins = [
     "http://127.0.0.1:5173",
     # Add more origins here
@@ -111,9 +112,136 @@ query($username: String!, $reposCursor: String) {
 }
 """
 
+
+def _safe_supabase_execute(action_name: str, operation: Any) -> None:
+    try:
+        operation.execute()
+    except Exception as exc:
+        logger.warning("Supabase %s failed: %s", action_name, exc)
+
+
+def _extract_auth_user(access_token: str) -> tuple[str | None, dict[str, Any]]:
+    auth_response = supabase.auth.get_user(access_token)
+    auth_user = getattr(auth_response, "user", None)
+    if auth_user is None and isinstance(auth_response, dict):
+        auth_user = auth_response.get("user")
+
+    if auth_user is None:
+        return None, {}
+
+    if hasattr(auth_user, "id"):
+        user_id = auth_user.id
+    elif isinstance(auth_user, dict):
+        user_id = auth_user.get("id")
+    else:
+        user_id = None
+
+    if hasattr(auth_user, "user_metadata"):
+        metadata = auth_user.user_metadata or {}
+    elif isinstance(auth_user, dict):
+        metadata = auth_user.get("user_metadata") or {}
+    else:
+        metadata = {}
+
+    return user_id, metadata
+
+
+def sync_user_profile(payload: GithubLoginRequest) -> tuple[str, str | None]:
+    user_id, metadata = _extract_auth_user(payload.access_token)
+    if not user_id:
+        raise ValueError("Could not resolve auth user from Supabase access token.")
+
+    github_username = (
+        payload.github_username
+        or metadata.get("user_name")
+        or metadata.get("preferred_username")
+    )
+    github_avatar_url = payload.github_avatar_url or metadata.get("avatar_url")
+
+    user_row = {
+        "id": user_id,
+        "github_username": github_username,
+        "github_avatar_url": github_avatar_url,
+    }
+
+    _safe_supabase_execute(
+        "users upsert",
+        supabase.table("users").upsert(user_row, on_conflict="id"),
+    )
+
+    return user_id, github_username
+
+
+def get_user_id_by_username(username: str) -> str | None:
+    try:
+        result = (
+            supabase.table("users")
+            .select("id")
+            .eq("github_username", username)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(result, "data", None) or []
+        if rows:
+            return rows[0].get("id")
+    except Exception as exc:
+        logger.warning("Supabase users lookup failed: %s", exc)
+    return None
+
+
+def persist_analysis_record(response_payload: AnalyzeResponse, user_id: str) -> None:
+    now_iso = datetime.now(timezone.utc).isoformat()
+    payload = response_payload.model_dump()
+
+    analysis_row = {
+        "user_id": user_id,
+        "insights_json": payload,
+        "created_at": now_iso,
+    }
+
+    analysis_result = supabase.table("analyses").insert(analysis_row).execute()
+    analysis_rows = getattr(analysis_result, "data", None) or []
+    analysis_id = analysis_rows[0].get("id") if analysis_rows else None
+
+    if not analysis_id:
+        logger.warning("Supabase analyses insert returned no id; skipping repo_analyses.")
+        return
+
+    repo_rows = [
+        {
+            "analysis_id": analysis_id,
+            "repo_name": repo.name,
+            "readme_grade": None,
+            "commit_pattern": None,
+            "is_tutorial": any("tutorial" in topic.lower() for topic in repo.topics),
+            "llm_insights_json": {
+                "developer_type": response_payload.insights.developer_type,
+                "summary": response_payload.insights.summary,
+            },
+            "raw_data_json": repo.model_dump(),
+            "created_at": now_iso,
+        }
+        for repo in response_payload.pinned_repos
+    ]
+
+    if repo_rows:
+        _safe_supabase_execute(
+            "repo_analyses insert",
+            supabase.table("repo_analyses").insert(repo_rows),
+        )
+
 @app.get("/", response_model=HomeResponse)
 def home() -> HomeResponse:
     return HomeResponse(message="GitIQ Backend Running 🚀")
+
+
+@app.post("/auth/github-login")
+async def save_github_login(payload: GithubLoginRequest):
+    try:
+        user_id, github_username = sync_user_profile(payload)
+        return {"ok": True, "user_id": user_id, "github_username": github_username}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/info/{username}")
@@ -390,8 +518,7 @@ async def analyze_user(username: str) -> AnalyzeResponse:
 
         insights = await generate_insights(llm_input)
         
-        # Return the analysis results
-        return AnalyzeResponse(
+        response_payload = AnalyzeResponse(
             username=username,
             total_repos=total_repos,
             total_stars=total_stars,
@@ -413,6 +540,16 @@ async def analyze_user(username: str) -> AnalyzeResponse:
             insights=insights,
             pinned_repos=pinned_repos
         )
+
+        owner_user_id = get_user_id_by_username(username)
+        if owner_user_id:
+            persist_analysis_record(response_payload, owner_user_id)
+        else:
+            logger.info(
+                "Skipping persistence for username '%s' because no matching users.id was found.",
+                username,
+            )
+        return response_payload
 
     except HTTPException:
         raise 

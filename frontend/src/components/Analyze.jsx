@@ -6,41 +6,6 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function buildActivityScore(details) {
-  const repoScore = toNumber(details.total_repos) * 4;
-  const starScore = toNumber(details.total_stars) * 2;
-  const eventScore = toNumber(details.total_events) * 1.8;
-  const repoTouchScore = toNumber(details.active_event_repos) * 3;
-
-  const activityBonus =
-    {
-      low: 8,
-      medium: 18,
-      high: 28,
-      very_high: 34,
-      extreme: 38,
-    }[String(details.activity_level || "").toLowerCase()] || 0;
-
-  const orgBonus = details.has_org_experience ? 10 : 0;
-
-  return clamp(
-    Math.round(
-      repoScore +
-        starScore +
-        eventScore +
-        repoTouchScore +
-        activityBonus +
-        orgBonus,
-    ),
-    12,
-    100,
-  );
-}
-
 function formatGap(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) {
     return "No cadence data";
@@ -79,7 +44,6 @@ function formatLatestActivity(value) {
 }
 
 function OverviewView({ details }) {
-  const activityScore = buildActivityScore(details);
   const languageEntries = details.top_languages || [];
   const topTopics = details.top_topics || [];
   const languageTotal =
@@ -93,37 +57,47 @@ function OverviewView({ details }) {
             <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
               Signal
             </p>
-            <h3 className="text-lg font-semibold text-white">Activity score</h3>
+            <h3 className="text-lg font-semibold text-white">
+              Activity snapshot
+            </h3>
           </div>
-          <div className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
-            <div
-              className="grid h-28 w-28 place-items-center rounded-full border-8 border-cyan-400/30 bg-slate-950"
-              aria-label={`Activity score ${activityScore} out of 100`}
-            >
-              <div className="grid text-center">
-                <strong className="text-3xl font-bold text-white">
-                  {activityScore}
+          <div className="grid gap-3">
+            <p className="text-sm text-slate-400">
+              Core profile telemetry from repositories, stars, events, and
+              contribution footprint.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2">
+                <span className="text-xs uppercase tracking-wider text-slate-500">
+                  Repos
+                </span>
+                <strong className="mt-1 block text-lg text-white">
+                  {details.total_repos ?? 0}
                 </strong>
-                <span className="text-xs uppercase tracking-widest text-slate-400">
-                  score
-                </span>
               </div>
-            </div>
-            <div className="grid gap-3">
-              <p className="text-sm text-slate-400">
-                A combined signal from repo count, stars, active events, and org
-                exposure.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <span className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-300">
-                  {details.total_repos ?? 0} repos
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2">
+                <span className="text-xs uppercase tracking-wider text-slate-500">
+                  Stars
                 </span>
-                <span className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-300">
-                  {details.total_stars ?? 0} stars
+                <strong className="mt-1 block text-lg text-white">
+                  {details.total_stars ?? 0}
+                </strong>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2">
+                <span className="text-xs uppercase tracking-wider text-slate-500">
+                  Events
                 </span>
-                <span className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-300">
-                  {details.total_events ?? 0} events
+                <strong className="mt-1 block text-lg text-white">
+                  {details.total_events ?? 0}
+                </strong>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2">
+                <span className="text-xs uppercase tracking-wider text-slate-500">
+                  Active Repos
                 </span>
+                <strong className="mt-1 block text-lg text-white">
+                  {details.active_event_repos ?? 0}
+                </strong>
               </div>
             </div>
           </div>

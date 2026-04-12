@@ -18,6 +18,7 @@ async def generate_insights(data: LLMInsightRequest) -> InsightResponse:
     Analyze the developer strictly based on the provided data and return ONLY valid JSON.
 
     Rules:
+    - limit responses to 4-5 sentences for summary and 3 points each for strengths and weaknesses
     - Based on the data, classify the developer into a specific type (e.g., "AI/Backend Enthusiast", "Full-Stack Developer", "Android Developer", etc.)
     - Be specific and avoid generic statements
     - Mention exact technologies (from languages/topics) 

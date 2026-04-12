@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import api from "./api";
 import Analyze from "./components/Analyze";
+import AuthPanel from "./components/AuthPanel";
 import SearchPanel from "./components/SearchPanel";
+import { supabase } from "./lib/supabase";
 
 const STORAGE_KEY = "gitiq-analysis";
 
@@ -13,6 +15,10 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [username, setUsername] = useState("");
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const lastAutoAnalyzedRef = useRef("");
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -28,6 +34,98 @@ function App() {
       localStorage.removeItem(STORAGE_KEY);
     }
   }, []);
+
+  useEffect(() => {
+    const hydrateSession = async () => {
+      const {
+        data: { session: activeSession },
+      } = await supabase.auth.getSession();
+      setSession(activeSession || null);
+    };
+
+    hydrateSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession || null);
+      if (!nextSession) {
+        lastAutoAnalyzedRef.current = "";
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const extractGithubUsername = (activeSession) => {
+    if (!activeSession?.user) {
+      return "";
+    }
+
+    const metadata = activeSession.user.user_metadata || {};
+    const identity = activeSession.user.identities?.find(
+      (entry) => entry.provider === "github",
+    );
+    const identityData = identity?.identity_data || {};
+
+    return (
+      metadata.user_name ||
+      metadata.preferred_username ||
+      identityData.user_name ||
+      identityData.preferred_username ||
+      ""
+    );
+  };
+
+  const persistGithubLogin = async (activeSession, githubUsername) => {
+    const accessToken = activeSession?.access_token;
+    if (!accessToken) {
+      return;
+    }
+
+    const metadata = activeSession?.user?.user_metadata || {};
+
+    await api.post("/auth/github-login", {
+      access_token: accessToken,
+      github_username:
+        githubUsername ||
+        metadata.user_name ||
+        metadata.preferred_username ||
+        null,
+      github_avatar_url: metadata.avatar_url || null,
+    });
+  };
+
+  useEffect(() => {
+    const runAuthenticatedAnalyze = async () => {
+      if (!session) {
+        return;
+      }
+
+      const githubUsername = extractGithubUsername(session);
+      if (!githubUsername || lastAutoAnalyzedRef.current === githubUsername) {
+        return;
+      }
+
+      setAuthError("");
+
+      try {
+        await persistGithubLogin(session, githubUsername);
+      } catch (persistError) {
+        setAuthError(
+          persistError.message ||
+            "Could not store GitHub login details in Supabase.",
+        );
+      }
+
+      lastAutoAnalyzedRef.current = githubUsername;
+      await runAnalyze(githubUsername);
+    };
+
+    runAuthenticatedAnalyze();
+  }, [session]);
 
   const toErrorMessage = (err, user) => {
     if (!axios.isAxiosError(err)) {
@@ -95,6 +193,35 @@ function App() {
     }
   };
 
+  const signInWithGithub = async () => {
+    setAuthLoading(true);
+    setAuthError("");
+
+    const redirectTo = `${window.location.origin}`;
+    const { error: signInError } = await supabase.auth.signInWithOAuth({
+      provider: "github",
+      options: { redirectTo },
+    });
+
+    if (signInError) {
+      setAuthError(signInError.message || "GitHub sign in failed.");
+      setAuthLoading(false);
+      return;
+    }
+  };
+
+  const signOut = async () => {
+    setAuthLoading(true);
+    setAuthError("");
+
+    const { error: signOutError } = await supabase.auth.signOut();
+    if (signOutError) {
+      setAuthError(signOutError.message || "Sign out failed.");
+    }
+
+    setAuthLoading(false);
+  };
+
   const clearSession = () => {
     setDetails(null);
     setError("");
@@ -134,7 +261,7 @@ function App() {
               onClick={() => setPage("access")}
               className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium transition hover:border-cyan-400/60 hover:text-cyan-300"
             >
-              Scan
+              Login / Scan
             </button>
             <button
               type="button"
@@ -309,12 +436,23 @@ function App() {
             <div className="grid gap-5">
               <div className="grid gap-2">
                 <h2 className="text-2xl font-semibold text-white">
-                  <span>Boot scanner</span>
+                  <span>GitHub access and scan</span>
                 </h2>
                 <p className="max-w-3xl text-slate-400">
-                  Input a GitHub handle to run a full telemetry sweep and
-                  generate a mission-ready profile snapshot.
+                  Sign in with GitHub for instant profile scan, or enter any
+                  public username manually.
                 </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                <AuthPanel
+                  session={session}
+                  onSignIn={signInWithGithub}
+                  onSignOut={signOut}
+                  isBusy={authLoading || loading}
+                  authError={authError}
+                  detectedUsername={extractGithubUsername(session)}
+                />
               </div>
 
               <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
