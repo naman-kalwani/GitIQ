@@ -154,12 +154,12 @@ function OverviewView({ details }) {
           </div>
           <div className="flex flex-wrap gap-2">
             {topTopics.length ? (
-              topTopics.map(([topic, count]) => (
+              topTopics.map(([topic]) => (
                 <span
                   key={topic}
-                  className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-300"
+                  className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-md text-slate-300"
                 >
-                  {topic} · {count}
+                  {topic}
                 </span>
               ))
             ) : (
@@ -231,6 +231,35 @@ function OverviewView({ details }) {
         <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
           <div className="mb-3">
             <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
+              Activity
+            </p>
+            <h3 className="text-lg font-semibold text-white">Summary</h3>
+          </div>
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm">
+              <span className="text-slate-400">Active repos</span>
+              <strong className="text-white">
+                {details.active_event_repos ?? 0}
+              </strong>
+            </div>
+            <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm">
+              <span className="text-slate-400">Activity level</span>
+              <strong className="text-white">
+                {details.activity_level || "Unknown"}
+              </strong>
+            </div>
+            <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm">
+              <span className="text-slate-400">Fork signal</span>
+              <strong className="text-white">
+                {details.fork_signal || "Unknown"}
+              </strong>
+            </div>
+          </div>
+        </article>
+
+        <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <div className="mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
               Focus
             </p>
             <h3 className="text-lg font-semibold text-white">Top repository</h3>
@@ -245,6 +274,28 @@ function OverviewView({ details }) {
             <p className="text-sm text-slate-400">
               {details.top_repo?.description || "No description available."}
             </p>
+          </div>
+        </article>
+
+        <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <div className="mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
+              Repositories
+            </p>
+            <h3 className="text-lg font-semibold text-white">
+              Pinned Repositories
+            </h3>
+          </div>
+          <div className="grid gap-2">
+            {(details.pinned_repos || []).map((repo) => (
+              <div
+                key={repo.repo_name}
+                className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm"
+              >
+                <strong className="text-slate-300"> {repo.name}</strong>
+                <span className="text-white">{repo.stars ?? 0} ⭐</span>
+              </div>
+            ))}
           </div>
         </article>
 
@@ -270,35 +321,6 @@ function OverviewView({ details }) {
                 ? "Evidence of organizational work and team-oriented activity."
                 : "No clear org signals detected in the available profile data."}
             </p>
-          </div>
-        </article>
-
-        <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-          <div className="mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
-              Activity
-            </p>
-            <h3 className="text-lg font-semibold text-white">Summary</h3>
-          </div>
-          <div className="grid gap-2">
-            <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm">
-              <span className="text-slate-400">Active repos</span>
-              <strong className="text-white">
-                {details.active_event_repos ?? 0}
-              </strong>
-            </div>
-            <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm">
-              <span className="text-slate-400">Activity level</span>
-              <strong className="text-white">
-                {details.activity_level || "Unknown"}
-              </strong>
-            </div>
-            <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm">
-              <span className="text-slate-400">Fork signal</span>
-              <strong className="text-white">
-                {details.fork_signal || "Unknown"}
-              </strong>
-            </div>
           </div>
         </article>
       </aside>
@@ -328,7 +350,7 @@ function ExtraRepoCards({ repos }) {
         <h3 className="text-2xl font-semibold text-white">More repositories</h3>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
         {repos.map((repo) => {
           const raw = repo.raw_data_json || {};
           const llm = repo.llm_insights_json || {};

@@ -2,38 +2,140 @@ import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import api from "./api";
 import Analyze from "./components/Analyze";
-import AuthPanel from "./components/AuthPanel";
 import SearchPanel from "./components/SearchPanel";
 import { supabase } from "./lib/supabase";
 
-const STORAGE_KEY = "gitiq-analysis";
+const USER_STORAGE_KEY = "gitiq-user-analysis";
+const SCAN_STORAGE_KEY = "gitiq-scan-analysis";
 const AUTH_SYNC_KEY = "gitiq-auth-sync";
+
+function AnalysisDashboard({
+  details,
+  dashboardView,
+  setDashboardView,
+  onRunAgain,
+  onClear,
+  runAgainLabel,
+}) {
+  const dashboardTabs = [
+    { id: "overview", label: "Overview" },
+    { id: "insights", label: "Insights" },
+    { id: "projects", label: "Repositories analysis" },
+  ];
+
+  return (
+    <section className="grid gap-5">
+      <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+        <div className="grid gap-1">
+          <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
+            Overview
+          </p>
+          <h1 className="text-2xl font-semibold text-white sm:text-3xl">
+            Analysis Dashboard
+          </h1>
+          <p className="max-w-3xl text-sm text-slate-400">
+            High-signal metrics first, detailed analytics behind a collapsible
+            section, and AI insights kept in a dedicated view.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+          <div
+            aria-hidden="true"
+            className="grid h-10 w-10 place-items-center rounded-full bg-cyan-500/20 text-sm font-semibold text-cyan-300"
+          >
+            {details.username?.slice(0, 1)?.toUpperCase() || "G"}
+          </div>
+          <div className="grid">
+            <strong>{details.username}</strong>
+            <span className="text-sm text-slate-400">
+              {details.activity_level
+                ? `${details.activity_level} activity`
+                : "Profile summary"}
+            </span>
+          </div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
+            <span className="h-2 w-2 rounded-full bg-emerald-300" />
+            <span>{details.activity_level || "Active"}</span>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-3"
+        role="tablist"
+        aria-label="Dashboard views"
+      >
+        {dashboardTabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+              dashboardView === tab.id
+                ? "bg-cyan-500 text-slate-950"
+                : "border border-slate-700 bg-slate-800 text-slate-200 hover:border-cyan-400/60 hover:text-cyan-300"
+            }`}
+            onClick={() => setDashboardView(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+        <div className="ml-auto flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onRunAgain}
+            className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-300"
+          >
+            {runAgainLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onClear}
+            className="rounded-xl border border-rose-400/50 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition hover:bg-rose-500/20"
+          >
+            Clear snapshot
+          </button>
+        </div>
+      </div>
+
+      <Analyze details={details} activeView={dashboardView} />
+    </section>
+  );
+}
 
 function App() {
   const [page, setPage] = useState("home");
-  const [dashboardView, setDashboardView] = useState("overview");
-  const [details, setDetails] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [username, setUsername] = useState("");
+  const [userDashboardView, setUserDashboardView] = useState("overview");
+  const [scanDashboardView, setScanDashboardView] = useState("overview");
+  const [userDetails, setUserDetails] = useState(null);
+  const [scanDetails, setScanDetails] = useState(null);
+  const [loadingTarget, setLoadingTarget] = useState("");
+  const [loadingUsername, setLoadingUsername] = useState("");
+  const [userError, setUserError] = useState("");
+  const [scanError, setScanError] = useState("");
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const lastAutoAnalyzedRef = useRef("");
   const authFlowInProgressRef = useRef(false);
+  const userMenuRef = useRef(null);
+  const previousSessionRef = useRef(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) {
-      return;
-    }
-
+    const savedUser = localStorage.getItem(USER_STORAGE_KEY);
+    const savedScan = localStorage.getItem(SCAN_STORAGE_KEY);
     try {
-      const parsed = JSON.parse(saved);
-      setDetails(parsed);
-      setPage("dashboard");
+      if (savedUser) {
+        setUserDetails(JSON.parse(savedUser));
+      }
+
+      if (savedScan) {
+        setScanDetails(JSON.parse(savedScan));
+      }
     } catch {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(USER_STORAGE_KEY);
+      localStorage.removeItem(SCAN_STORAGE_KEY);
     }
   }, []);
 
@@ -50,6 +152,14 @@ function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      const wasLoggedOut = !previousSessionRef.current;
+      const isNowLoggedIn = !!nextSession;
+      previousSessionRef.current = nextSession;
+
+      if (wasLoggedOut && isNowLoggedIn) {
+        setPage("userDashboard");
+      }
+
       setSession(nextSession || null);
       if (!nextSession) {
         lastAutoAnalyzedRef.current = "";
@@ -60,6 +170,28 @@ function App() {
 
     return () => {
       subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (!userMenuRef.current?.contains(event.target)) {
+        setShowUserMenu(false);
+      }
+    };
+
+    const handleEsc = (event) => {
+      if (event.key === "Escape") {
+        setShowUserMenu(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleEsc);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleEsc);
     };
   }, []);
 
@@ -128,7 +260,7 @@ function App() {
       try {
         await persistGithubLogin(session, githubUsername);
         sessionStorage.setItem(AUTH_SYNC_KEY, syncKey);
-        await runAnalyze(githubUsername);
+        await runAnalyze(githubUsername, "user");
       } catch (persistError) {
         setAuthError(
           persistError.message ||
@@ -140,6 +272,8 @@ function App() {
     };
 
     runAuthenticatedAnalyze();
+    // runAnalyze is intentionally invoked only when the auth session changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
   const toErrorMessage = (err, user) => {
@@ -185,32 +319,55 @@ function App() {
     return err.message || "Failed to fetch analysis data.";
   };
 
-  const runAnalyze = async (user) => {
+  const runAnalyze = async (user, target = "scan") => {
     if (!user) {
-      setError("Please enter a valid GitHub username.");
+      if (target === "user") {
+        setUserError("Please enter a valid GitHub username.");
+      } else {
+        setScanError("Please enter a valid GitHub username.");
+      }
       return;
     }
 
-    setUsername(user);
-    setLoading(true);
-    setError("");
+    setLoadingUsername(user);
+    setLoadingTarget(target);
+
+    if (target === "user") {
+      setUserError("");
+    } else {
+      setScanError("");
+    }
 
     try {
       const response = await api.get(`/analyze/${user}`);
-      setDetails(response.data);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(response.data));
-      setDashboardView("overview");
-      setPage("dashboard");
+
+      if (target === "user") {
+        setUserDetails(response.data);
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.data));
+        setUserDashboardView("overview");
+        setPage("userDashboard");
+      } else {
+        setScanDetails(response.data);
+        localStorage.setItem(SCAN_STORAGE_KEY, JSON.stringify(response.data));
+        setScanDashboardView("overview");
+        setPage("scanDashboard");
+      }
     } catch (err) {
-      setError(toErrorMessage(err, user));
+      if (target === "user") {
+        setUserError(toErrorMessage(err, user));
+      } else {
+        setScanError(toErrorMessage(err, user));
+      }
     } finally {
-      setLoading(false);
+      setLoadingTarget("");
+      setLoadingUsername("");
     }
   };
 
   const signInWithGithub = async () => {
     setAuthLoading(true);
     setAuthError("");
+    setShowUserMenu(false);
 
     const redirectTo = `${window.location.origin}`;
     const { error: signInError } = await supabase.auth.signInWithOAuth({
@@ -228,6 +385,7 @@ function App() {
   const signOut = async () => {
     setAuthLoading(true);
     setAuthError("");
+    setShowUserMenu(false);
 
     const { error: signOutError } = await supabase.auth.signOut();
     if (signOutError) {
@@ -241,20 +399,23 @@ function App() {
     setAuthLoading(false);
   };
 
-  const clearSession = () => {
-    setDetails(null);
-    setError("");
-    setUsername("");
-    setDashboardView("overview");
-    localStorage.removeItem(STORAGE_KEY);
-    setPage("home");
+  const clearUserSnapshot = () => {
+    setUserDetails(null);
+    setUserError("");
+    setUserDashboardView("overview");
+    localStorage.removeItem(USER_STORAGE_KEY);
   };
 
-  const dashboardTabs = [
-    { id: "overview", label: "Overview" },
-    { id: "insights", label: "Insights" },
-    { id: "projects", label: "Projects" },
-  ];
+  const clearScanSnapshot = () => {
+    setScanDetails(null);
+    setScanError("");
+    setScanDashboardView("overview");
+    localStorage.removeItem(SCAN_STORAGE_KEY);
+  };
+
+  const detectedUsername = extractGithubUsername(session);
+  const isUserLoading = loadingTarget === "user";
+  const isScanLoading = loadingTarget === "scan";
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -267,35 +428,94 @@ function App() {
               Modern GitHub profile intelligence
             </p>
           </div>
-          <nav aria-label="primary" className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setPage("home")}
-              className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium transition hover:border-cyan-400/60 hover:text-cyan-300"
-            >
-              Home
-            </button>
-            <button
-              type="button"
-              onClick={() => setPage("access")}
-              className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium transition hover:border-cyan-400/60 hover:text-cyan-300"
-            >
-              Login / Scan
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (details) {
-                  setDashboardView("overview");
-                  setPage("dashboard");
-                }
-              }}
-              disabled={!details}
-              className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium transition hover:border-cyan-400/60 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Dashboard
-            </button>
-          </nav>
+          <div className="flex flex-wrap items-center gap-3">
+            <nav aria-label="primary" className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setPage("home")}
+                className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium transition hover:border-cyan-400/60 hover:text-cyan-300"
+              >
+                Home
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage("userDashboard")}
+                className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium transition hover:border-cyan-400/60 hover:text-cyan-300"
+              >
+                Your Insights
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage("scanDashboard")}
+                className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium transition hover:border-cyan-400/60 hover:text-cyan-300"
+              >
+                Other Profiles
+              </button>
+            </nav>
+
+            <div className="relative" ref={userMenuRef}>
+              <button
+                type="button"
+                onClick={() => setShowUserMenu((prev) => !prev)}
+                className="grid h-10 w-10 place-items-center rounded-full border border-slate-700 bg-slate-800 text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-300"
+                aria-haspopup="menu"
+                aria-expanded={showUserMenu}
+                aria-label="User menu"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  className="h-5 w-5"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="8" r="3.5" />
+                  <path d="M5.5 19.5c1.4-3.4 4-5 6.5-5s5.1 1.6 6.5 5" />
+                </svg>
+              </button>
+
+              {showUserMenu && (
+                <div
+                  role="menu"
+                  className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-slate-700 bg-slate-900 p-3 shadow-xl shadow-slate-950/70"
+                >
+                  <div className="mb-3 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">
+                      Account
+                    </p>
+                    <p className="truncate text-sm font-medium text-slate-100">
+                      {detectedUsername || session?.user?.email || "Guest"}
+                    </p>
+                  </div>
+
+                  {session ? (
+                    <button
+                      type="button"
+                      onClick={signOut}
+                      disabled={authLoading}
+                      className="w-full rounded-lg border border-rose-400/50 bg-rose-500/10 px-3 py-2 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Sign out
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={signInWithGithub}
+                      disabled={authLoading}
+                      className="w-full rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Login with GitHub
+                    </button>
+                  )}
+
+                  {authError && (
+                    <p className="mt-3 text-xs text-rose-300">{authError}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </header>
 
         {page === "home" && (
@@ -338,7 +558,7 @@ function App() {
                     GitIQ Signal Studio
                   </span>
                   <span className="text-base font-medium text-cyan-300 sm:text-lg">
-                    Aesthetic dark analytics for developer profiles
+                    Dark analytics for developer profiles
                   </span>
                 </h1>
                 <p className="max-w-2xl text-slate-300">
@@ -362,23 +582,17 @@ function App() {
                 <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
-                    onClick={() => setPage("access")}
+                    onClick={() => setPage("userDashboard")}
                     className="rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
                   >
-                    → Start Scan
+                    → Get Your Insights
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (details) {
-                        setDashboardView("insights");
-                        setPage("dashboard");
-                      }
-                    }}
-                    disabled={!details}
+                    onClick={() => setPage("scanDashboard")}
                     className="rounded-xl border border-slate-700 bg-slate-800 px-5 py-2.5 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/60 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    View Insights
+                    Scan other Profiles
                   </button>
                 </div>
               </div>
@@ -450,138 +664,126 @@ function App() {
           </section>
         )}
 
-        {page === "access" && (
+        {page === "userDashboard" && (
           <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
             <div className="grid gap-5">
               <div className="grid gap-2">
                 <h2 className="text-2xl font-semibold text-white">
-                  <span>GitHub access and scan</span>
+                  <span>User Dashboard</span>
                 </h2>
                 <p className="max-w-3xl text-slate-400">
-                  Sign in with GitHub for instant profile scan, or enter any
-                  public username manually.
+                  Signed-in profile insights live here. Use the user icon in the
+                  header to login or sign out.
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                <AuthPanel
-                  session={session}
-                  onSignIn={signInWithGithub}
-                  onSignOut={signOut}
-                  isBusy={authLoading || loading}
-                  authError={authError}
-                  detectedUsername={extractGithubUsername(session)}
-                />
-              </div>
+              {session && !userDetails && !isUserLoading && (
+                <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-4 text-amber-200">
+                  <p className="mb-3 text-sm">
+                    No user snapshot found yet. Sync your GitHub profile to
+                    generate insights.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => runAnalyze(detectedUsername, "user")}
+                    disabled={!detectedUsername}
+                    className="rounded-xl border border-amber-300/40 bg-amber-400/10 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Sync my profile
+                  </button>
+                </div>
+              )}
 
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                <SearchPanel onAnalyze={runAnalyze} submitLabel="EXECUTE" />
-              </div>
-
-              {loading && (
+              {isUserLoading && (
                 <div className="flex items-center gap-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-cyan-200">
                   <div className="flex gap-1">
                     <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300" />
                     <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300 [animation-delay:120ms]" />
                     <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300 [animation-delay:240ms]" />
                   </div>
-                  <span>Scanning {username}...</span>
+                  <span>Scanning {loadingUsername}...</span>
                 </div>
               )}
 
-              {error && (
+              {userError && (
                 <div className="flex items-center gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-rose-200">
                   <span>⚠</span>
-                  <span>{error}</span>
+                  <span>{userError}</span>
                 </div>
+              )}
+
+              {!session && (
+                <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-4 text-sm text-slate-300">
+                  Sign in with GitHub to unlock your personal dashboard.
+                </div>
+              )}
+
+              {session && userDetails && (
+                <AnalysisDashboard
+                  details={userDetails}
+                  dashboardView={userDashboardView}
+                  setDashboardView={setUserDashboardView}
+                  onRunAgain={() => runAnalyze(detectedUsername, "user")}
+                  onClear={clearUserSnapshot}
+                  runAgainLabel="Refresh my insights"
+                />
               )}
             </div>
           </section>
         )}
 
-        {page === "dashboard" && details && (
-          <section className="grid gap-5">
-            <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
-              <div className="grid gap-1">
-                <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
-                  Overview
-                </p>
-                <h1 className="text-2xl font-semibold text-white sm:text-3xl">
-                  Analysis Dashboard
-                </h1>
-                <p className="max-w-3xl text-sm text-slate-400">
-                  High-signal metrics first, detailed analytics behind a
-                  collapsible section, and AI insights kept in a dedicated view.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3">
-                <div
-                  aria-hidden="true"
-                  className="grid h-10 w-10 place-items-center rounded-full bg-cyan-500/20 text-sm font-semibold text-cyan-300"
-                >
-                  {details.username?.slice(0, 1)?.toUpperCase() || "G"}
-                </div>
-                <div className="grid">
-                  <strong>{details.username}</strong>
-                  <span className="text-sm text-slate-400">
-                    {details.activity_level
-                      ? `${details.activity_level} activity`
-                      : "Profile summary"}
-                  </span>
-                </div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
-                  <span className="h-2 w-2 rounded-full bg-emerald-300" />
-                  <span>{details.activity_level || "Active"}</span>
-                </div>
-              </div>
-            </div>
-
-            <div
-              className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-3"
-              role="tablist"
-              aria-label="Dashboard views"
-            >
-              {dashboardTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                    dashboardView === tab.id
-                      ? "bg-cyan-500 text-slate-950"
-                      : "border border-slate-700 bg-slate-800 text-slate-200 hover:border-cyan-400/60 hover:text-cyan-300"
-                  }`}
-                  onClick={() => setDashboardView(tab.id)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-              <div className="ml-auto flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPage("access")}
-                  className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-300"
-                >
-                  Run again
-                </button>
-                <button
-                  type="button"
-                  onClick={clearSession}
-                  className="rounded-xl border border-rose-400/50 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition hover:bg-rose-500/20"
-                >
-                  Clear session
-                </button>
-              </div>
-            </div>
-
-            <Analyze details={details} activeView={dashboardView} />
-          </section>
-        )}
-
-        {page === "dashboard" && !details && (
+        {page === "scanDashboard" && (
           <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
-            <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-amber-200">
-              No saved insights found yet. Run analyze first.
+            <div className="grid gap-5">
+              <div className="grid gap-2">
+                <h2 className="text-2xl font-semibold text-white">
+                  <span>Scan Dashboard</span>
+                </h2>
+                <p className="max-w-3xl text-slate-400">
+                  Analyze any public GitHub username and review insights in a
+                  dedicated scan workspace.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                <SearchPanel
+                  onAnalyze={(user) => runAnalyze(user, "scan")}
+                  submitLabel="RUN SCAN"
+                />
+              </div>
+
+              {isScanLoading && (
+                <div className="flex items-center gap-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-cyan-200">
+                  <div className="flex gap-1">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300 [animation-delay:120ms]" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300 [animation-delay:240ms]" />
+                  </div>
+                  <span>Scanning {loadingUsername}...</span>
+                </div>
+              )}
+
+              {scanError && (
+                <div className="flex items-center gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-rose-200">
+                  <span>⚠</span>
+                  <span>{scanError}</span>
+                </div>
+              )}
+
+              {scanDetails ? (
+                <AnalysisDashboard
+                  details={scanDetails}
+                  dashboardView={scanDashboardView}
+                  setDashboardView={setScanDashboardView}
+                  onRunAgain={() => runAnalyze(scanDetails.username, "scan")}
+                  onClear={clearScanSnapshot}
+                  runAgainLabel="Run this scan again"
+                />
+              ) : (
+                <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-4 text-sm text-slate-300">
+                  Start a scan to populate this dashboard.
+                </div>
+              )}
             </div>
           </section>
         )}

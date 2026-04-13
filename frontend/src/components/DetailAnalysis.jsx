@@ -38,22 +38,6 @@ function DetailAnalysis({ repos }) {
               <span>Topics: {repo.topics?.join(", ") || "None"}</span>
               <span>Languages: {repo.languages?.join(", ") || "None"}</span>
             </div>
-
-            {repo.recent_commits?.length ? (
-              <div className="grid gap-1 rounded-lg border border-slate-800 bg-slate-900/70 p-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-cyan-300">
-                  Recent commits
-                </span>
-                {repo.recent_commits.slice(0, 3).map((entry, index) => (
-                  <div
-                    key={`${repo.name}-commit-${index}`}
-                    className="text-xs text-slate-300"
-                  >
-                    • {entry.message}
-                  </div>
-                ))}
-              </div>
-            ) : null}
           </article>
         ))}
       </div>
