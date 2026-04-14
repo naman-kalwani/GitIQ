@@ -18,8 +18,8 @@ function AuthPanel({
       </div>
 
       <p className="text-sm text-slate-400">
-        Continue with GitHub once. GitIQ will auto-detect your username, sync
-        your profile to Supabase, and trigger analysis instantly.
+        Continue with GitHub once. GitIQ will auto-detect your username and sync
+        your profile to Supabase. Then click "Analyze" to start analysis.
       </p>
 
       {session ? (

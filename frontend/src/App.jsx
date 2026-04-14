@@ -235,7 +235,7 @@ function App() {
   };
 
   useEffect(() => {
-    const runAuthenticatedAnalyze = async () => {
+    const runAuthenticatedSync = async () => {
       if (!session) {
         return;
       }
@@ -260,7 +260,6 @@ function App() {
       try {
         await persistGithubLogin(session, githubUsername);
         sessionStorage.setItem(AUTH_SYNC_KEY, syncKey);
-        await runAnalyze(githubUsername, "user");
       } catch (persistError) {
         setAuthError(
           persistError.message ||
@@ -271,8 +270,8 @@ function App() {
       }
     };
 
-    runAuthenticatedAnalyze();
-    // runAnalyze is intentionally invoked only when the auth session changes.
+    runAuthenticatedSync();
+    // Sync profile only; analyze is triggered manually by user, not automatically.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
@@ -748,7 +747,7 @@ function App() {
               <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
                 <SearchPanel
                   onAnalyze={(user) => runAnalyze(user, "scan")}
-                  submitLabel="RUN SCAN"
+                  submitLabel="SCAN"
                 />
               </div>
 

@@ -80,7 +80,7 @@ async def build_analysis(username: str) -> tuple[AnalyzeResponse, list[dict], di
     top_repo = (
         max(all_repos, key=lambda repo: repo.get("stargazerCount", 0))
         if all_repos
-        else {"name": "None", "stargazerCount": 0}
+        else {"name": "None", "stargazerCount": 0, "description": None}
     )
 
     if forked_repos > 5:
@@ -196,7 +196,7 @@ async def build_analysis(username: str) -> tuple[AnalyzeResponse, list[dict], di
         total_stars=total_stars,
         total_pinned_commits=total_pinned_commits,
         top_languages=top_languages,
-        top_repo=TopRepo(name=top_repo["name"], stars=top_repo.get("stargazerCount", 0)),
+        top_repo=TopRepo(name=top_repo["name"], stars=top_repo.get("stargazerCount", 0), description=top_repo.get("description", None)),
         top_topics=top_topics,
         top_events=top_events,
         total_events=total_events,

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import api from "../api";
 import DetailAnalysis from "./DetailAnalysis.jsx";
 import InsightsPanel from "./InsightsPanel.jsx";
+import RepoAnalysisDetail from "./RepoAnalysisDetail.jsx";
 
 function toNumber(value) {
   const parsed = Number(value);
@@ -265,11 +266,13 @@ function OverviewView({ details }) {
             <h3 className="text-lg font-semibold text-white">Top repository</h3>
           </div>
           <div className="grid gap-2">
-            <strong className="text-white">
-              {details.top_repo?.name || "No top repo"}
-            </strong>
-            <div className="w-fit rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-xs text-amber-200">
-              ⭐ {details.top_repo?.stars ?? 0}
+            <div className="flex items-center justify-between  text-lg">
+              <strong className="text-white">
+                {details.top_repo?.name || "No top repo"}
+              </strong>
+              <div className="w-fit rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-xs text-amber-200">
+                ⭐ {details.top_repo?.stars ?? 0}
+              </div>
             </div>
             <p className="text-sm text-slate-400">
               {details.top_repo?.description || "No description available."}
@@ -300,28 +303,32 @@ function OverviewView({ details }) {
         </article>
 
         <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-          <div className="mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
-              Collaboration
-            </p>
-            <h3 className="text-lg font-semibold text-white">Org experience</h3>
+          <div className="flex items-center justify-between">
+            <div className="mb-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
+                Collaboration
+              </p>
+              <h3 className="text-lg font-semibold text-white">
+                Org experience
+              </h3>
+            </div>
+            <div className="grid gap-2">
+              <span
+                className={`w-fit rounded-md px-3 py-1 text-lg font-medium ${
+                  details.has_org_experience
+                    ? "border border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                    : "border border-amber-400/40 bg-amber-400/10 text-amber-300"
+                }`}
+              >
+                {details.has_org_experience ? "Yes" : "No"}
+              </span>
+            </div>
           </div>
-          <div className="grid gap-2">
-            <span
-              className={`w-fit rounded-full px-3 py-1 text-xs font-medium ${
-                details.has_org_experience
-                  ? "border border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                  : "border border-amber-400/40 bg-amber-400/10 text-amber-300"
-              }`}
-            >
-              {details.has_org_experience ? "Yes" : "No"}
-            </span>
-            <p className="text-sm text-slate-400">
-              {details.has_org_experience
-                ? "Evidence of organizational work and team-oriented activity."
-                : "No clear org signals detected in the available profile data."}
-            </p>
-          </div>
+          <p className="text-sm text-slate-400">
+            {details.has_org_experience
+              ? "Evidence of organizational work and team-oriented activity."
+              : "No clear org signals detected in the available profile data."}
+          </p>
         </article>
       </aside>
     </section>
@@ -336,7 +343,7 @@ function InsightsView({ details }) {
   );
 }
 
-function ExtraRepoCards({ repos }) {
+function ExtraRepoCards({ repos, onAnalyzeRepo }) {
   if (!repos.length) {
     return null;
   }
@@ -375,6 +382,21 @@ function ExtraRepoCards({ repos }) {
               <div className="text-xs text-cyan-200">
                 {llm.pinned_summary?.summary || "Insight pending"}
               </div>
+              <div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onAnalyzeRepo({
+                      repoName: repo.repo_name,
+                      repoId:
+                        raw.github_repo_id || raw.repo_id || raw.id || repo.id,
+                    })
+                  }
+                  className="inline-flex items-center rounded-lg border border-cyan-400/50 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/20"
+                >
+                  Analyze
+                </button>
+              </div>
             </article>
           );
         })}
@@ -389,6 +411,11 @@ function ProjectsView({ details }) {
   const [totalRepos, setTotalRepos] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [repoModalOpen, setRepoModalOpen] = useState(false);
+  const [repoModalLoading, setRepoModalLoading] = useState(false);
+  const [repoModalError, setRepoModalError] = useState("");
+  const [selectedRepoRow, setSelectedRepoRow] = useState(null);
+  const [selectedRepoLabel, setSelectedRepoLabel] = useState("");
 
   const pinnedNamesCsv = useMemo(
     () => (details.pinned_repos || []).map((repo) => repo.name).join(","),
@@ -433,11 +460,40 @@ function ProjectsView({ details }) {
     }
   };
 
+  const handleAnalyzeRepo = async ({ repoName, repoId }) => {
+    setRepoModalOpen(true);
+    setRepoModalLoading(true);
+    setRepoModalError("");
+    setSelectedRepoRow(null);
+    setSelectedRepoLabel(repoName || "Repository");
+
+    try {
+      const response = await api.get(`/repo-analysis/${details.username}`, {
+        params: {
+          repo_name: repoName || undefined,
+          repo_id: repoId || undefined,
+        },
+      });
+
+      setSelectedRepoRow(response.data?.item || null);
+    } catch (err) {
+      setRepoModalError(
+        err?.response?.data?.detail ||
+          "Failed to fetch repository analysis row.",
+      );
+    } finally {
+      setRepoModalLoading(false);
+    }
+  };
+
   const hasMore = nextOffset !== -1;
 
   return (
     <section className="grid gap-4">
-      <DetailAnalysis repos={details.pinned_repos} />
+      <DetailAnalysis
+        repos={details.pinned_repos}
+        onAnalyzeRepo={({ repoName }) => handleAnalyzeRepo({ repoName })}
+      />
 
       <div className="flex flex-wrap items-center gap-3">
         <button
@@ -463,7 +519,16 @@ function ProjectsView({ details }) {
         </div>
       ) : null}
 
-      <ExtraRepoCards repos={extraRepos} />
+      <ExtraRepoCards repos={extraRepos} onAnalyzeRepo={handleAnalyzeRepo} />
+
+      <RepoAnalysisDetail
+        open={repoModalOpen}
+        onClose={() => setRepoModalOpen(false)}
+        loading={repoModalLoading}
+        error={repoModalError}
+        item={selectedRepoRow}
+        repoLabel={selectedRepoLabel}
+      />
     </section>
   );
 }

@@ -4,6 +4,7 @@ from typing import List
 class TopRepo(BaseModel):
   name: str
   stars: int
+  description: str | None
 
 class CommitEntry(BaseModel):
   message: str

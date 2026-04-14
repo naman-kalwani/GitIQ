@@ -56,6 +56,7 @@ query($username: String!, $reposCursor: String) {
     repositories(first: 100, after: $reposCursor, orderBy: {field: UPDATED_AT, direction: DESC}) {
       nodes {
         name
+        description
         isFork
         stargazerCount
 

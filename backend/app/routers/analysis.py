@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 from httpx import HTTPStatusError
 
 from app.services.supabase_service import (
+    get_repo_analysis_item,
     get_repo_analyses_page,
     get_user_id_by_username,
     persist_analysis_record,
@@ -45,6 +46,36 @@ async def get_repo_analyses(
         )
         if payload.get("error") == "USER_NOT_FOUND":
             raise HTTPException(status_code=404, detail="User not found in Supabase users table.")
+        return payload
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/repo-analysis/{username}")
+async def get_repo_analysis(
+    username: str,
+    repo_name: str | None = Query(default=None),
+    repo_id: str | None = Query(default=None),
+):
+    if not repo_name and not repo_id:
+        raise HTTPException(status_code=400, detail="Either repo_name or repo_id is required.")
+
+    try:
+        payload = get_repo_analysis_item(
+            username=username,
+            repo_name=repo_name,
+            repo_id=repo_id,
+        )
+
+        if payload.get("error") == "USER_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="User not found in Supabase users table.")
+        if payload.get("error") == "ANALYSIS_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="No analysis found for this user.")
+        if payload.get("error") == "REPO_ANALYSIS_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="No repo analysis row found for the selected repository.")
+
         return payload
     except HTTPException:
         raise

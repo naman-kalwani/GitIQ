@@ -127,6 +127,8 @@ def _build_repo_analysis_rows(
             ),
             "raw_data_json": {
                 "name": repo_name,
+                "github_repo_id": repo.get("id"),
+                "repo_id": repo.get("databaseId"),
                 "is_pinned": is_pinned,
                 "is_fork": repo.get("isFork"),
                 "stars": repo.get("stargazerCount", 0),
@@ -180,19 +182,42 @@ def persist_analysis_record(
     now_iso = datetime.now(timezone.utc).isoformat()
     payload = response_payload.model_dump()
 
-    analysis_row = {
-        "user_id": user_id,
-        "insights_json": payload,
-        "created_at": now_iso,
-    }
+    # Check if user already has an analysis
+    existing_analysis_id = get_latest_analysis_id_for_user(user_id)
 
-    analysis_result = supabase.table("analyses").insert(analysis_row).execute()
-    analysis_rows = getattr(analysis_result, "data", None) or []
-    analysis_id = analysis_rows[0].get("id") if analysis_rows else None
+    if existing_analysis_id:
+        # UPDATE existing analysis
+        analysis_row = {
+            "insights_json": payload,
+        }
+        try:
+            supabase.table("analyses").update(analysis_row).eq("id", existing_analysis_id).execute()
+        except Exception as exc:
+            logger.error("Supabase analyses update failed: %s", exc)
+            raise
+        
+        analysis_id = existing_analysis_id
 
-    if not analysis_id:
-        logger.warning("Supabase analyses insert returned no id; skipping repo_analyses.")
-        return
+        # DELETE old repo_analyses for this analysis
+        try:
+            supabase.table("repo_analyses").delete().eq("analysis_id", analysis_id).execute()
+        except Exception as exc:
+            logger.error("Supabase repo_analyses delete failed: %s", exc)
+            raise
+    else:
+        # INSERT new analysis (first time)
+        analysis_row = {
+            "user_id": user_id,
+            "insights_json": payload,
+            "created_at": now_iso,
+        }
+        analysis_result = supabase.table("analyses").insert(analysis_row).execute()
+        analysis_rows = getattr(analysis_result, "data", None) or []
+        analysis_id = analysis_rows[0].get("id") if analysis_rows else None
+
+        if not analysis_id:
+            logger.warning("Supabase analyses insert returned no id; skipping repo_analyses.")
+            return
 
     repo_rows = _build_repo_analysis_rows(
         all_repos=all_repos,
@@ -237,7 +262,7 @@ def get_repo_analyses_page(username: str, offset: int, limit: int, exclude_names
 
     result = (
         supabase.table("repo_analyses")
-        .select("repo_name, readme_grade, commit_pattern, is_tutorial, llm_insights_json, raw_data_json, created_at")
+        .select("id, analysis_id, repo_name, readme_grade, commit_pattern, is_tutorial, llm_insights_json, raw_data_json, created_at")
         .eq("analysis_id", analysis_id)
         .execute()
     )
@@ -263,3 +288,49 @@ def get_repo_analyses_page(username: str, offset: int, limit: int, exclude_names
         "total": total,
         "next_offset": next_offset,
     }
+
+
+def get_repo_analysis_item(
+    username: str,
+    repo_name: str | None,
+    repo_id: str | None,
+) -> dict:
+    user_id = get_user_id_by_username(username)
+    if not user_id:
+        return {"error": "USER_NOT_FOUND"}
+
+    analysis_id = get_latest_analysis_id_for_user(user_id)
+    if not analysis_id:
+        return {"error": "ANALYSIS_NOT_FOUND"}
+
+    result = (
+        supabase.table("repo_analyses")
+        .select("id, analysis_id, repo_name, readme_grade, commit_pattern, is_tutorial, llm_insights_json, raw_data_json, created_at")
+        .eq("analysis_id", analysis_id)
+        .execute()
+    )
+
+    rows = getattr(result, "data", None) or []
+    normalized_name = (repo_name or "").strip().lower()
+    normalized_id = str(repo_id).strip() if repo_id is not None else ""
+
+    for row in rows:
+        current_name = str(row.get("repo_name") or "").strip().lower()
+        row_id = str(row.get("id") or "").strip()
+        raw_data = row.get("raw_data_json") or {}
+        raw_repo_id = str(
+            raw_data.get("github_repo_id")
+            or raw_data.get("repo_id")
+            or raw_data.get("id")
+            or ""
+        ).strip()
+
+        matched_by_name = bool(normalized_name) and current_name == normalized_name
+        matched_by_id = bool(normalized_id) and (
+            row_id == normalized_id or raw_repo_id == normalized_id
+        )
+
+        if matched_by_name or matched_by_id:
+            return {"item": row}
+
+    return {"error": "REPO_ANALYSIS_NOT_FOUND"}

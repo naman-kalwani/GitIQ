@@ -1,4 +1,4 @@
-function DetailAnalysis({ repos }) {
+function DetailAnalysis({ repos, onAnalyzeRepo }) {
   if (!repos || repos.length === 0) {
     return null;
   }
@@ -37,6 +37,16 @@ function DetailAnalysis({ repos }) {
             <div className="grid gap-1 text-xs text-slate-400">
               <span>Topics: {repo.topics?.join(", ") || "None"}</span>
               <span>Languages: {repo.languages?.join(", ") || "None"}</span>
+            </div>
+
+            <div>
+              <button
+                type="button"
+                onClick={() => onAnalyzeRepo({ repoName: repo.name })}
+                className="inline-flex items-center rounded-lg border border-cyan-400/50 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/20"
+              >
+                Analyze
+              </button>
             </div>
           </article>
         ))}
