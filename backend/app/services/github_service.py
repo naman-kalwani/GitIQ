@@ -77,6 +77,24 @@ query($username: String!, $reposCursor: String) {
             }
           }
         }
+
+        defaultBranchRef {
+          target {
+            ... on Commit {
+              history(first: 10) {
+                totalCount
+                nodes {
+                  oid
+                  message
+                  committedDate
+                  author {
+                    name
+                  }
+                }
+              }
+            }
+          }
+        }
       }
 
       pageInfo {

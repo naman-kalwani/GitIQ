@@ -29,6 +29,19 @@ function toDisplayValue(value) {
   return String(value);
 }
 
+function formatCommitDate(value) {
+  if (!value) {
+    return "-";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value);
+  }
+
+  return parsed.toLocaleString();
+}
+
 function RepoAnalysisDetail({
   open,
   onClose,
@@ -58,6 +71,11 @@ function RepoAnalysisDetail({
 
   const rawData = item?.raw_data_json || null;
   const llmData = item?.llm_insights_json || null;
+  const hasLlMData =
+    llmData && typeof llmData === "object" && Object.keys(llmData).length > 0;
+  const recentCommits = Array.isArray(rawData?.recent_commits)
+    ? rawData.recent_commits
+    : [];
 
   return (
     <div
@@ -127,24 +145,6 @@ function RepoAnalysisDetail({
                     {formatDate(item.created_at)}
                   </p>
                 </div>
-                <div>
-                  <span className="text-slate-500">Readme grade</span>
-                  <p className="text-slate-200">
-                    {toDisplayValue(item.readme_grade)}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-slate-500">Commit pattern</span>
-                  <p className="text-slate-200">
-                    {toDisplayValue(item.commit_pattern)}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-slate-500">Is tutorial</span>
-                  <p className="text-slate-200">
-                    {toDisplayValue(item.is_tutorial)}
-                  </p>
-                </div>
               </div>
             </section>
 
@@ -161,10 +161,41 @@ function RepoAnalysisDetail({
               <h4 className="text-sm font-semibold text-white">
                 llm_insights_json
               </h4>
-              <pre className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">
-                {toDisplayValue(llmData)}
-              </pre>
+              {hasLlMData ? (
+                <pre className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">
+                  {toDisplayValue(llmData)}
+                </pre>
+              ) : (
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs text-slate-400">
+                  LLM insights are pending and will appear after analysis is
+                  generated.
+                </div>
+              )}
             </section>
+
+            {recentCommits.length ? (
+              <section className="grid gap-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <h4 className="text-sm font-semibold text-white">
+                  Recent commits
+                </h4>
+                <div className="grid gap-2">
+                  {recentCommits.map((commit, index) => (
+                    <div
+                      key={commit.oid || `${commit.message}-${index}`}
+                      className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300"
+                    >
+                      <div className="font-medium text-slate-100">
+                        {commit.message || "No commit message"}
+                      </div>
+                      <div className="mt-1 grid gap-1 text-slate-400 sm:grid-cols-2">
+                        <span>Author: {commit.author || "Unknown"}</span>
+                        <span>Date: {formatCommitDate(commit.date)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </div>
         ) : null}
       </div>

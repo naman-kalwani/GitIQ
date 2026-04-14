@@ -94,6 +94,24 @@ def _build_repo_analysis_rows(
 ) -> list[dict]:
     rows_by_name: dict[str, dict] = {}
 
+    def _extract_commit_history(repo: dict) -> tuple[int, list[dict]]:
+        history = (
+            repo.get("defaultBranchRef", {})
+            .get("target", {})
+            .get("history", {})
+        )
+        total_commits = history.get("totalCount", 0)
+        recent_commits = [
+            {
+                "message": commit.get("message", "N/A").split("\n")[0],
+                "date": commit.get("committedDate"),
+                "author": commit.get("author", {}).get("name", "Unknown"),
+                "oid": commit.get("oid"),
+            }
+            for commit in history.get("nodes", [])
+        ]
+        return total_commits, recent_commits
+
     for repo in all_repos:
         repo_name = repo.get("name")
         if not repo_name:
@@ -109,24 +127,16 @@ def _build_repo_analysis_rows(
             for lang_node in repo.get("languages", {}).get("nodes", [])
             if lang_node.get("name")
         ]
+        total_commits, recent_commits = _extract_commit_history(repo)
         is_pinned = repo_name in pinned_repo_details
 
         rows_by_name[repo_name] = {
             "analysis_id": analysis_id,
             "repo_name": repo_name,
-            "readme_grade": None,
-            "commit_pattern": None,
-            "is_tutorial": any("tutorial" in topic.lower() for topic in topics),
-            "llm_insights_json": (
-                {
-                    "is_pinned": True,
-                    "pinned_summary": pinned_repo_details[repo_name],
-                }
-                if is_pinned
-                else {"is_pinned": False}
-            ),
+            "llm_insights_json": {},
             "raw_data_json": {
                 "name": repo_name,
+                "description": repo.get("description"),
                 "github_repo_id": repo.get("id"),
                 "repo_id": repo.get("databaseId"),
                 "is_pinned": is_pinned,
@@ -135,6 +145,8 @@ def _build_repo_analysis_rows(
                 "primary_language": repo.get("primaryLanguage", {}).get("name"),
                 "languages": languages,
                 "topics": topics,
+                "total_commits": total_commits,
+                "recent_commits": recent_commits,
             },
             "created_at": now_iso,
         }
@@ -151,13 +163,7 @@ def _build_repo_analysis_rows(
         rows_by_name[repo_name] = {
             "analysis_id": analysis_id,
             "repo_name": repo_name,
-            "readme_grade": None,
-            "commit_pattern": None,
-            "is_tutorial": any("tutorial" in str(topic).lower() for topic in topics),
-            "llm_insights_json": {
-                "is_pinned": True,
-                "pinned_summary": pinned_data,
-            },
+            "llm_insights_json": {},
             "raw_data_json": {
                 "name": repo_name,
                 "is_pinned": True,
@@ -262,7 +268,7 @@ def get_repo_analyses_page(username: str, offset: int, limit: int, exclude_names
 
     result = (
         supabase.table("repo_analyses")
-        .select("id, analysis_id, repo_name, readme_grade, commit_pattern, is_tutorial, llm_insights_json, raw_data_json, created_at")
+        .select("id, analysis_id, repo_name, llm_insights_json, raw_data_json, created_at")
         .eq("analysis_id", analysis_id)
         .execute()
     )
@@ -305,7 +311,7 @@ def get_repo_analysis_item(
 
     result = (
         supabase.table("repo_analyses")
-        .select("id, analysis_id, repo_name, readme_grade, commit_pattern, is_tutorial, llm_insights_json, raw_data_json, created_at")
+        .select("id, analysis_id, repo_name, llm_insights_json, raw_data_json, created_at")
         .eq("analysis_id", analysis_id)
         .execute()
     )
@@ -334,3 +340,31 @@ def get_repo_analysis_item(
             return {"item": row}
 
     return {"error": "REPO_ANALYSIS_NOT_FOUND"}
+
+
+def update_repo_analysis_insights(
+    row_id: str,
+    llm_insights_json: dict,
+    raw_data_json: dict | None = None,
+) -> dict | None:
+    if not row_id:
+        return None
+
+    payload: dict[str, Any] = {
+        "llm_insights_json": llm_insights_json or {},
+    }
+    if raw_data_json is not None:
+        payload["raw_data_json"] = raw_data_json
+
+    result = (
+        supabase.table("repo_analyses")
+        .update(payload)
+        .eq("id", row_id)
+        .execute()
+    )
+
+    rows = getattr(result, "data", None) or []
+    if rows:
+        return rows[0]
+
+    return None

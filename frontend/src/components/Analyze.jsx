@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 import DetailAnalysis from "./DetailAnalysis.jsx";
 import InsightsPanel from "./InsightsPanel.jsx";
@@ -343,7 +343,7 @@ function InsightsView({ details }) {
   );
 }
 
-function ExtraRepoCards({ repos, onAnalyzeRepo }) {
+function ExtraRepoCards({ repos, onAnalyzeRepo, repoAnalysesByName = {} }) {
   if (!repos.length) {
     return null;
   }
@@ -360,9 +360,19 @@ function ExtraRepoCards({ repos, onAnalyzeRepo }) {
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
         {repos.map((repo) => {
           const raw = repo.raw_data_json || {};
-          const llm = repo.llm_insights_json || {};
+          const repoAnalysis = repoAnalysesByName[repo.repo_name] || null;
+          const llm =
+            repoAnalysis?.llm_insights_json || repo.llm_insights_json || {};
+          const hasLlMData =
+            llm && typeof llm === "object" && Object.keys(llm).length > 0;
           const languages = raw.languages || [];
           const topics = raw.topics || [];
+          const runAction = (action) =>
+            onAnalyzeRepo({
+              repoName: repo.repo_name,
+              repoId: raw.github_repo_id || raw.repo_id || raw.id || repo.id,
+              action,
+            });
 
           return (
             <article
@@ -371,7 +381,9 @@ function ExtraRepoCards({ repos, onAnalyzeRepo }) {
             >
               <strong className="text-white">{repo.repo_name}</strong>
               <p className="text-xs text-slate-400">
-                {raw.description || "No description available."}
+                {raw.description ||
+                  repo.description ||
+                  "No description available."}
               </p>
               <div className="text-xs text-slate-400">
                 <div>⭐ {raw.stars ?? 0}</div>
@@ -379,23 +391,38 @@ function ExtraRepoCards({ repos, onAnalyzeRepo }) {
                 <div>Languages: {languages.join(", ") || "None"}</div>
                 <div>Topics: {topics.join(", ") || "None"}</div>
               </div>
-              <div className="text-xs text-cyan-200">
-                {llm.pinned_summary?.summary || "Insight pending"}
-              </div>
-              <div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onAnalyzeRepo({
-                      repoName: repo.repo_name,
-                      repoId:
-                        raw.github_repo_id || raw.repo_id || raw.id || repo.id,
-                    })
-                  }
-                  className="inline-flex items-center rounded-lg border border-cyan-400/50 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/20"
-                >
-                  Analyze
-                </button>
+              {llm.pinned_summary?.summary ? (
+                <div className="text-xs text-cyan-200">
+                  {llm.pinned_summary.summary}
+                </div>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                {!hasLlMData ? (
+                  <button
+                    type="button"
+                    onClick={() => runAction("analyze")}
+                    className="inline-flex items-center rounded-lg border border-cyan-400/50 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/20"
+                  >
+                    Analyze
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => runAction("view")}
+                      className="inline-flex items-center rounded-lg border border-emerald-400/50 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300 hover:bg-emerald-500/20"
+                    >
+                      Get insights
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => runAction("reanalyze")}
+                      className="inline-flex items-center rounded-lg border border-cyan-400/50 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/20"
+                    >
+                      Re-Analyze
+                    </button>
+                  </>
+                )}
               </div>
             </article>
           );
@@ -411,6 +438,9 @@ function ProjectsView({ details }) {
   const [totalRepos, setTotalRepos] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [repoAnalysesByName, setRepoAnalysesByName] = useState({});
+  const [repoAnalysesLoading, setRepoAnalysesLoading] = useState(false);
+  const [repoAnalysesError, setRepoAnalysesError] = useState("");
   const [repoModalOpen, setRepoModalOpen] = useState(false);
   const [repoModalLoading, setRepoModalLoading] = useState(false);
   const [repoModalError, setRepoModalError] = useState("");
@@ -421,6 +451,76 @@ function ProjectsView({ details }) {
     () => (details.pinned_repos || []).map((repo) => repo.name).join(","),
     [details.pinned_repos],
   );
+
+  useEffect(() => {
+    if (!details.username) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadRepoAnalyses = async () => {
+      setRepoAnalysesLoading(true);
+      setRepoAnalysesError("");
+
+      try {
+        let offset = 0;
+        let hasMore = true;
+        const rows = [];
+
+        while (hasMore) {
+          const response = await api.get(`/repo-analyses/${details.username}`, {
+            params: {
+              offset,
+              limit: 25,
+            },
+          });
+
+          const items = response.data?.items || [];
+          rows.push(...items);
+
+          if (
+            response.data?.next_offset === null ||
+            response.data?.next_offset === undefined
+          ) {
+            hasMore = false;
+          } else {
+            offset = response.data.next_offset;
+          }
+        }
+
+        if (!isMounted) {
+          return;
+        }
+
+        const byName = rows.reduce((accumulator, row) => {
+          if (row?.repo_name) {
+            accumulator[row.repo_name] = row;
+          }
+          return accumulator;
+        }, {});
+
+        setRepoAnalysesByName(byName);
+      } catch (err) {
+        if (isMounted) {
+          setRepoAnalysesError(
+            err?.response?.data?.detail ||
+              "Failed to load repository analysis metadata.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setRepoAnalysesLoading(false);
+        }
+      }
+    };
+
+    loadRepoAnalyses();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [details.username]);
 
   const loadMoreRepos = async () => {
     if (loadingMore) {
@@ -460,7 +560,7 @@ function ProjectsView({ details }) {
     }
   };
 
-  const handleAnalyzeRepo = async ({ repoName, repoId }) => {
+  const handleAnalyzeRepo = async ({ repoName, repoId, action = "view" }) => {
     setRepoModalOpen(true);
     setRepoModalLoading(true);
     setRepoModalError("");
@@ -468,14 +568,39 @@ function ProjectsView({ details }) {
     setSelectedRepoLabel(repoName || "Repository");
 
     try {
-      const response = await api.get(`/repo-analysis/${details.username}`, {
-        params: {
-          repo_name: repoName || undefined,
-          repo_id: repoId || undefined,
-        },
-      });
+      const shouldGenerate = action === "analyze" || action === "reanalyze";
+      const response = shouldGenerate
+        ? await api.post(`/repo-analyses/${details.username}/insights`, null, {
+            params: {
+              repo_name: repoName || undefined,
+              repo_id: repoId || undefined,
+              force: action === "reanalyze",
+            },
+          })
+        : await api.get(`/repo-analyses/${details.username}/item`, {
+            params: {
+              repo_name: repoName || undefined,
+              repo_id: repoId || undefined,
+            },
+          });
 
       setSelectedRepoRow(response.data?.item || null);
+
+      const updated = response.data?.item;
+      if (updated?.repo_name) {
+        setRepoAnalysesByName((prev) => ({
+          ...prev,
+          [updated.repo_name]: updated,
+        }));
+
+        setExtraRepos((prev) =>
+          prev.map((repo) =>
+            repo.repo_name === updated.repo_name
+              ? { ...repo, llm_insights_json: updated.llm_insights_json }
+              : repo,
+          ),
+        );
+      }
     } catch (err) {
       setRepoModalError(
         err?.response?.data?.detail ||
@@ -492,7 +617,11 @@ function ProjectsView({ details }) {
     <section className="grid gap-4">
       <DetailAnalysis
         repos={details.pinned_repos}
-        onAnalyzeRepo={({ repoName }) => handleAnalyzeRepo({ repoName })}
+        repoAnalysesByName={repoAnalysesByName}
+        repoAnalysesLoading={repoAnalysesLoading}
+        onAnalyzeRepo={({ repoName, action }) =>
+          handleAnalyzeRepo({ repoName, action })
+        }
       />
 
       <div className="flex flex-wrap items-center gap-3">
@@ -519,7 +648,17 @@ function ProjectsView({ details }) {
         </div>
       ) : null}
 
-      <ExtraRepoCards repos={extraRepos} onAnalyzeRepo={handleAnalyzeRepo} />
+      {repoAnalysesError ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          {repoAnalysesError}
+        </div>
+      ) : null}
+
+      <ExtraRepoCards
+        repos={extraRepos}
+        onAnalyzeRepo={handleAnalyzeRepo}
+        repoAnalysesByName={repoAnalysesByName}
+      />
 
       <RepoAnalysisDetail
         open={repoModalOpen}
