@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
-from httpx import HTTPStatusError
+from httpx import HTTPStatusError, TimeoutException
 
 from app.services.supabase_service import (
     get_repo_analysis_item,
@@ -32,6 +32,11 @@ async def get_user_info(username: str):
         except Exception:
             detail = exc.response.text
         raise HTTPException(status_code=exc.response.status_code, detail=detail)
+    except TimeoutException:
+        raise HTTPException(
+            status_code=504,
+            detail="GitHub request timed out while analyzing this profile. Please try again.",
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 

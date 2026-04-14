@@ -16,12 +16,21 @@ function AnalysisDashboard({
   onRunAgain,
   onClear,
   runAgainLabel,
+  showProjectsTab = true,
 }) {
-  const dashboardTabs = [
+  const allTabs = [
     { id: "overview", label: "Overview" },
     { id: "insights", label: "Insights" },
     { id: "projects", label: "Repositories analysis" },
   ];
+  const dashboardTabs = showProjectsTab
+    ? allTabs
+    : allTabs.filter((tab) => tab.id !== "projects");
+  const effectiveDashboardView = dashboardTabs.some(
+    (tab) => tab.id === dashboardView,
+  )
+    ? dashboardView
+    : "overview";
 
   return (
     <section className="grid gap-5">
@@ -71,7 +80,7 @@ function AnalysisDashboard({
             key={tab.id}
             type="button"
             className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-              dashboardView === tab.id
+              effectiveDashboardView === tab.id
                 ? "bg-cyan-500 text-slate-950"
                 : "border border-slate-700 bg-slate-800 text-slate-200 hover:border-cyan-400/60 hover:text-cyan-300"
             }`}
@@ -98,7 +107,7 @@ function AnalysisDashboard({
         </div>
       </div>
 
-      <Analyze details={details} activeView={dashboardView} />
+      <Analyze details={details} activeView={effectiveDashboardView} />
     </section>
   );
 }
@@ -725,6 +734,7 @@ function App() {
                   onRunAgain={() => runAnalyze(detectedUsername, "user")}
                   onClear={clearUserSnapshot}
                   runAgainLabel="Refresh my insights"
+                  showProjectsTab
                 />
               )}
             </div>
@@ -777,6 +787,7 @@ function App() {
                   onRunAgain={() => runAnalyze(scanDetails.username, "scan")}
                   onClear={clearScanSnapshot}
                   runAgainLabel="Run this scan again"
+                  showProjectsTab={false}
                 />
               ) : (
                 <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-4 text-sm text-slate-300">

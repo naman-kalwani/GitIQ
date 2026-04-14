@@ -42,6 +42,34 @@ function formatCommitDate(value) {
   return parsed.toLocaleString();
 }
 
+function formatList(values) {
+  if (!Array.isArray(values) || !values.length) {
+    return "-";
+  }
+
+  return values.join(", ");
+}
+
+function getInsightValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === "object") {
+    return value;
+  }
+
+  return String(value);
+}
+
 function RepoAnalysisDetail({
   open,
   onClose,
@@ -76,6 +104,22 @@ function RepoAnalysisDetail({
   const recentCommits = Array.isArray(rawData?.recent_commits)
     ? rawData.recent_commits
     : [];
+  const rawSummary = rawData
+    ? {
+        name: rawData.name,
+        description: rawData.description,
+        is_pinned: rawData.is_pinned,
+        is_fork: rawData.is_fork,
+        stars: rawData.stars,
+        primary_language: rawData.primary_language,
+        languages: rawData.languages,
+        topics: rawData.topics,
+        github_repo_id: rawData.github_repo_id,
+        repo_id: rawData.repo_id,
+        total_commits: rawData.total_commits,
+        readme_summary: rawData.readme_summary,
+      }
+    : null;
 
   return (
     <div
@@ -121,50 +165,180 @@ function RepoAnalysisDetail({
 
         {!loading && !error && item ? (
           <div className="grid gap-4">
-            <section className="grid gap-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-sm">
-              <div className="grid gap-1 sm:grid-cols-2">
+            <section className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm">
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                  <span className="text-slate-500">Row ID</span>
-                  <p className="text-slate-200">{toDisplayValue(item.id)}</p>
-                </div>
-                <div>
-                  <span className="text-slate-500">Analysis ID</span>
-                  <p className="text-slate-200">
-                    {toDisplayValue(item.analysis_id)}
+                  <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
+                    Repository
                   </p>
-                </div>
-                <div>
-                  <span className="text-slate-500">Repo name</span>
-                  <p className="text-slate-200">
+                  <h4 className="text-lg font-semibold text-white">
                     {toDisplayValue(item.repo_name)}
-                  </p>
+                  </h4>
                 </div>
-                <div>
-                  <span className="text-slate-500">Created at</span>
-                  <p className="text-slate-200">
+                <div className="text-right text-xs text-slate-400">
+                  <div>Analyzed at</div>
+                  <div className="text-slate-200">
                     {formatDate(item.created_at)}
-                  </p>
+                  </div>
                 </div>
               </div>
             </section>
 
-            <section className="grid gap-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+            <section className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
               <h4 className="text-sm font-semibold text-white">
-                raw_data_json
+                Raw repository data
               </h4>
-              <pre className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">
-                {toDisplayValue(rawData)}
-              </pre>
+              {rawSummary ? (
+                <div className="grid gap-3 text-sm sm:grid-cols-2">
+                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
+                    <span className="text-xs uppercase tracking-wider text-slate-500">
+                      Description
+                    </span>
+                    <p className="mt-1 text-slate-200">
+                      {rawSummary.description || "No description available."}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
+                    <span className="text-xs uppercase tracking-wider text-slate-500">
+                      Primary language
+                    </span>
+                    <p className="mt-1 text-slate-200">
+                      {rawSummary.primary_language || "Unknown"}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
+                    <span className="text-xs uppercase tracking-wider text-slate-500">
+                      Stars
+                    </span>
+                    <p className="mt-1 text-slate-200">
+                      {toDisplayValue(rawSummary.stars)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
+                    <span className="text-xs uppercase tracking-wider text-slate-500">
+                      Commits
+                    </span>
+                    <p className="mt-1 text-slate-200">
+                      {toDisplayValue(rawSummary.total_commits)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 sm:col-span-2">
+                    <span className="text-xs uppercase tracking-wider text-slate-500">
+                      Languages
+                    </span>
+                    <p className="mt-1 text-slate-200">
+                      {formatList(rawSummary.languages)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 sm:col-span-2">
+                    <span className="text-xs uppercase tracking-wider text-slate-500">
+                      Topics
+                    </span>
+                    <p className="mt-1 text-slate-200">
+                      {formatList(rawSummary.topics)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
+                    <span className="text-xs uppercase tracking-wider text-slate-500">
+                      Pinned
+                    </span>
+                    <p className="mt-1 text-slate-200">
+                      {toDisplayValue(rawSummary.is_pinned)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
+                    <span className="text-xs uppercase tracking-wider text-slate-500">
+                      Fork
+                    </span>
+                    <p className="mt-1 text-slate-200">
+                      {toDisplayValue(rawSummary.is_fork)}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
             </section>
 
-            <section className="grid gap-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-              <h4 className="text-sm font-semibold text-white">
-                llm_insights_json
-              </h4>
+            <section className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+              <h4 className="text-sm font-semibold text-white">LLM insights</h4>
               {hasLlMData ? (
-                <pre className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">
-                  {toDisplayValue(llmData)}
-                </pre>
+                <div className="grid gap-3 text-sm sm:grid-cols-2">
+                  {[
+                    ["Readme grade", getInsightValue(llmData.readme_grade)],
+                    [
+                      "Readme feedback",
+                      getInsightValue(llmData.readme_feedback),
+                    ],
+                    ["Commit pattern", getInsightValue(llmData.commit_pattern)],
+                    [
+                      "Commit feedback",
+                      getInsightValue(llmData.commit_feedback),
+                    ],
+                    ["Tutorial project", getInsightValue(llmData.is_tutorial)],
+                    [
+                      "Project reasoning",
+                      getInsightValue(llmData.project_type_reasoning),
+                    ],
+                  ].map(([label, value]) => (
+                    <div
+                      key={label}
+                      className="rounded-lg border border-slate-800 bg-slate-950 p-3"
+                    >
+                      <span className="text-xs uppercase tracking-wider text-slate-500">
+                        {label}
+                      </span>
+                      <p className="mt-1 text-slate-200">
+                        {Array.isArray(value)
+                          ? formatList(value)
+                          : value || "-"}
+                      </p>
+                    </div>
+                  ))}
+
+                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 sm:col-span-2">
+                    <span className="text-xs uppercase tracking-wider text-slate-500">
+                      Strengths
+                    </span>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-200">
+                      {(llmData.strengths || []).length ? (
+                        llmData.strengths.map((item, index) => (
+                          <li key={`${item}-${index}`}>{item}</li>
+                        ))
+                      ) : (
+                        <li>No strengths available.</li>
+                      )}
+                    </ul>
+                  </div>
+
+                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 sm:col-span-2">
+                    <span className="text-xs uppercase tracking-wider text-slate-500">
+                      Weaknesses
+                    </span>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-200">
+                      {(llmData.weaknesses || []).length ? (
+                        llmData.weaknesses.map((item, index) => (
+                          <li key={`${item}-${index}`}>{item}</li>
+                        ))
+                      ) : (
+                        <li>No weaknesses available.</li>
+                      )}
+                    </ul>
+                  </div>
+
+                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 sm:col-span-2">
+                    <span className="text-xs uppercase tracking-wider text-slate-500">
+                      Recommendations
+                    </span>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-200">
+                      {(llmData.recommendations || []).length ? (
+                        llmData.recommendations.map((item, index) => (
+                          <li key={`${item}-${index}`}>{item}</li>
+                        ))
+                      ) : (
+                        <li>No recommendations available.</li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
               ) : (
                 <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs text-slate-400">
                   LLM insights are pending and will appear after analysis is

@@ -10,7 +10,8 @@ from models.responseModels import AnalyzeResponse, CommitEntry, PinnedRepo, TopR
 
 
 async def build_analysis(username: str) -> tuple[AnalyzeResponse, list[dict], dict[str, dict]]:
-    async with httpx.AsyncClient() as client:
+    timeout = httpx.Timeout(30.0, connect=10.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
         events_data = await fetch_user_events(client, username)
         all_repos, pinned_items = await fetch_user_repos_and_pinned(client, username)
 
