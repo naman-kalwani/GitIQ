@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 from httpx import HTTPStatusError, TimeoutException
 
 from app.services.supabase_service import (
+    get_latest_analysis_payload_by_username,
     get_repo_analysis_item,
     get_repo_analyses_page,
     get_user_id_by_username,
@@ -19,6 +20,20 @@ from models.responseModels import AnalyzeResponse
 
 
 router = APIRouter(tags=["analysis"])
+
+
+@router.get("/analyze/{username}/cached", response_model=AnalyzeResponse)
+async def get_cached_analysis(username: str) -> AnalyzeResponse:
+    try:
+        payload = get_latest_analysis_payload_by_username(username)
+        if not payload:
+            raise HTTPException(status_code=404, detail="No cached analysis found for this user.")
+
+        return AnalyzeResponse.model_validate(payload)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/info/{username}")

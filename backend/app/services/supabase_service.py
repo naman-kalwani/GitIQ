@@ -257,6 +257,33 @@ def get_latest_analysis_id_for_user(user_id: str) -> str | None:
     return None
 
 
+def get_latest_analysis_payload_by_username(username: str) -> dict | None:
+    user_id = get_user_id_by_username(username)
+    if not user_id:
+        return None
+
+    try:
+        result = (
+            supabase.table("analyses")
+            .select("insights_json")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(result, "data", None) or []
+        if not rows:
+            return None
+
+        insights_json = rows[0].get("insights_json")
+        if isinstance(insights_json, dict):
+            return insights_json
+    except Exception as exc:
+        logger.warning("Supabase analysis payload lookup failed: %s", exc)
+
+    return None
+
+
 def get_repo_analyses_page(username: str, offset: int, limit: int, exclude_names: str | None) -> dict:
     user_id = get_user_id_by_username(username)
     if not user_id:

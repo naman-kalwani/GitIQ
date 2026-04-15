@@ -267,12 +267,36 @@ function App() {
       setAuthError("");
 
       try {
-        await persistGithubLogin(session, githubUsername);
+        try {
+          await persistGithubLogin(session, githubUsername);
+        } catch (persistError) {
+          setAuthError(
+            persistError.message ||
+              "Could not store GitHub login details in Supabase.",
+          );
+        }
+
+        try {
+          const cachedResponse = await api.get(
+            `/analyze/${githubUsername}/cached`,
+          );
+          applyUserAnalysis(cachedResponse.data);
+        } catch (cachedError) {
+          if (
+            axios.isAxiosError(cachedError) &&
+            cachedError.response?.status === 404
+          ) {
+            await runAnalyze(githubUsername, "user");
+          } else {
+            throw cachedError;
+          }
+        }
+
         sessionStorage.setItem(AUTH_SYNC_KEY, syncKey);
-      } catch (persistError) {
+      } catch (syncError) {
         setAuthError(
-          persistError.message ||
-            "Could not store GitHub login details in Supabase.",
+          syncError?.message ||
+            "Could not load your profile insights. Please try refreshing insights.",
         );
       } finally {
         authFlowInProgressRef.current = false;
@@ -280,7 +304,7 @@ function App() {
     };
 
     runAuthenticatedSync();
-    // Sync profile only; analyze is triggered manually by user, not automatically.
+    // Login now syncs profile, loads cached analysis when available, and scans only when missing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
@@ -327,6 +351,13 @@ function App() {
     return err.message || "Failed to fetch analysis data.";
   };
 
+  const applyUserAnalysis = (analysis) => {
+    setUserDetails(analysis);
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(analysis));
+    setUserDashboardView("overview");
+    setPage("userDashboard");
+  };
+
   const runAnalyze = async (user, target = "scan") => {
     if (!user) {
       if (target === "user") {
@@ -350,10 +381,7 @@ function App() {
       const response = await api.get(`/analyze/${user}`);
 
       if (target === "user") {
-        setUserDetails(response.data);
-        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.data));
-        setUserDashboardView("overview");
-        setPage("userDashboard");
+        applyUserAnalysis(response.data);
       } else {
         setScanDetails(response.data);
         localStorage.setItem(SCAN_STORAGE_KEY, JSON.stringify(response.data));
