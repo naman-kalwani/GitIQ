@@ -44,9 +44,11 @@ def _extract_auth_user(access_token: str) -> tuple[str | None, dict[str, Any]]:
 
 
 def sync_user_profile(payload: GithubLoginRequest) -> tuple[str, str | None]:
-    user_id, metadata = _extract_auth_user(payload.access_token)
-    if not user_id:
-        raise ValueError("Could not resolve auth user from Supabase access token.")
+    try:
+        user_id, metadata = _extract_auth_user(payload.access_token)
+    except Exception as exc:
+        logger.warning("Supabase auth lookup failed: %s", exc)
+        user_id, metadata = None, {}
 
     github_username = (
         payload.github_username
@@ -55,16 +57,24 @@ def sync_user_profile(payload: GithubLoginRequest) -> tuple[str, str | None]:
     )
     github_avatar_url = payload.github_avatar_url or metadata.get("avatar_url")
 
-    user_row = {
-        "id": user_id,
-        "github_username": github_username,
-        "github_avatar_url": github_avatar_url,
-    }
+    if not github_username:
+        raise ValueError("GitHub username is required to sync the profile.")
 
-    _safe_supabase_execute(
-        "users upsert",
-        supabase.table("users").upsert(user_row, on_conflict="id"),
-    )
+    if user_id:
+        user_row = {
+            "id": user_id,
+            "github_username": github_username,
+            "github_avatar_url": github_avatar_url,
+        }
+
+        _safe_supabase_execute(
+            "users upsert",
+            supabase.table("users").upsert(user_row, on_conflict="id"),
+        )
+    else:
+        logger.warning(
+            "Skipping Supabase user upsert because the auth user could not be resolved."
+        )
 
     return user_id, github_username
 
@@ -287,7 +297,7 @@ def get_latest_analysis_payload_by_username(username: str) -> dict | None:
 def get_repo_analyses_page(username: str, offset: int, limit: int, exclude_names: str | None) -> dict:
     user_id = get_user_id_by_username(username)
     if not user_id:
-        return {"error": "USER_NOT_FOUND"}
+        return {"items": [], "total": 0, "next_offset": None}
 
     analysis_id = get_latest_analysis_id_for_user(user_id)
     if not analysis_id:

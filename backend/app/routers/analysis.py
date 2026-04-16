@@ -70,8 +70,6 @@ async def get_repo_analyses(
             limit=limit,
             exclude_names=exclude_names,
         )
-        if payload.get("error") == "USER_NOT_FOUND":
-            raise HTTPException(status_code=404, detail="User not found in Supabase users table.")
         return payload
     except HTTPException:
         raise
